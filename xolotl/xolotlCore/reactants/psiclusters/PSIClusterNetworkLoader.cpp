@@ -718,6 +718,37 @@ std::unique_ptr<IReactionNetwork> PSIClusterNetworkLoader::generate(
 		}
 	}
 
+	// Read input file for migration energies if it is present
+	std::ifstream migrationFile;
+	migrationFile.open("migration.txt");
+	if (migrationFile.good()) {
+		// Build an input stream from the string
+		xolotlCore::TokenizedLineReader<double> reader;
+		// Get the line
+		std::string line;
+
+		// Loop on helium
+		for (int i = 1; i <= 7; i++) {
+			// Read the line to get the energy
+			getline(migrationFile, line);
+			auto lineSS = std::make_shared<std::istringstream>(line);
+			reader.setInputStream(lineSS);
+			auto tokens = reader.loadLine();
+
+			// Get the corresponding helium cluster
+			auto cluster = network->get(Species::He, i);
+			cluster->setMigrationEnergy(tokens[0]);
+		}
+
+		// The last one is vacancy
+		getline(migrationFile, line);
+		auto lineSS = std::make_shared<std::istringstream>(line);
+		reader.setInputStream(lineSS);
+		auto tokens = reader.loadLine();
+		auto cluster = network->get(Species::V, 1);
+		cluster->setMigrationEnergy(tokens[0]);
+	}
+
 	// Update reactants now that they are in network.
 	for (IReactant& currCluster : reactants) {
 		currCluster.updateFromNetwork();
