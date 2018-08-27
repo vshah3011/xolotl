@@ -722,6 +722,12 @@ std::unique_ptr<IReactionNetwork> PSIClusterNetworkLoader::generate(
 	std::ifstream migrationFile;
 	migrationFile.open("migration.txt");
 	if (migrationFile.good()) {
+
+		// Print a message to say we found the file and we are reading from it
+		int procId;
+		MPI_Comm_rank(MPI_COMM_WORLD, &procId);
+		if (procId == 0)
+			std::cout << "Found migration.txt, the energies are: ";
 		// Build an input stream from the string
 		xolotlCore::TokenizedLineReader<double> reader;
 		// Get the line
@@ -738,6 +744,8 @@ std::unique_ptr<IReactionNetwork> PSIClusterNetworkLoader::generate(
 			// Get the corresponding helium cluster
 			auto cluster = network->get(Species::He, i);
 			cluster->setMigrationEnergy(tokens[0]);
+			if (procId == 0)
+				std::cout << tokens[0] << " eV, ";
 		}
 
 		// The last one is vacancy
@@ -747,6 +755,8 @@ std::unique_ptr<IReactionNetwork> PSIClusterNetworkLoader::generate(
 		auto tokens = reader.loadLine();
 		auto cluster = network->get(Species::V, 1);
 		cluster->setMigrationEnergy(tokens[0]);
+		if (procId == 0)
+			std::cout << tokens[0] << " eV" << std::endl;
 	}
 
 	// Update reactants now that they are in network.
