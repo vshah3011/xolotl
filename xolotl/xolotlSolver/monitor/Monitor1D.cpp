@@ -26,6 +26,8 @@
 #include "xolotlCore/io/XFile.h"
 #include "xolotlSolver/monitor/Monitor.h"
 
+namespace xperf = xolotlPerf;
+
 namespace xolotlSolver {
 
 // Declaration of the functions defined in Monitor.cpp
@@ -91,9 +93,21 @@ bool printMaxClusterConc1D = true;
 std::vector<int> depthPositions1D;
 
 // Timers
-std::shared_ptr<xolotlPerf::ITimer> startStopTimer;
-std::shared_ptr<xolotlPerf::ITimer> eventTimer;
-std::shared_ptr<xolotlPerf::ITimer> postEventTimer;
+std::shared_ptr<xperf::ITimer> initTimer;
+std::shared_ptr<xperf::ITimer> checkNegativeTimer;
+std::shared_ptr<xperf::ITimer> tridynTimer;
+std::shared_ptr<xperf::ITimer> startStopTimer;
+std::shared_ptr<xperf::ITimer> heRetentionTimer;
+std::shared_ptr<xperf::ITimer> xeRetentionTimer;
+std::shared_ptr<xperf::ITimer> heConcTimer;
+std::shared_ptr<xperf::ITimer> cumHeTimer;
+std::shared_ptr<xperf::ITimer> scatterTimer;
+std::shared_ptr<xperf::ITimer> seriesTimer;
+std::shared_ptr<xperf::ITimer> surfaceTimer;
+std::shared_ptr<xperf::ITimer> meanSizeTimer;
+std::shared_ptr<xperf::ITimer> maxClusterConcTimer;
+std::shared_ptr<xperf::ITimer> eventFuncTimer;
+std::shared_ptr<xperf::ITimer> postEventFuncTimer;
 
 #undef __FUNCT__
 #define __FUNCT__ Actual__FUNCT__("xolotlSolver", "checkNegative1D")
@@ -102,6 +116,9 @@ std::shared_ptr<xolotlPerf::ITimer> postEventTimer;
  */
 PetscErrorCode checkNegative1D(TS ts, PetscInt timestep, PetscReal time,
 		Vec solution, void *) {
+
+	xperf::ScopedTimer myTimer(checkNegativeTimer);
+
 	// Initial declaration
 	PetscErrorCode ierr;
 	const double **solutionArray, *gridPointSolution;
@@ -188,6 +205,8 @@ PetscErrorCode checkNegative1D(TS ts, PetscInt timestep, PetscReal time,
 PetscErrorCode computeTRIDYN1D(TS ts, PetscInt timestep, PetscReal time,
 		Vec solution, void *ictx) {
 
+	xperf::ScopedTimer myTimer(tridynTimer);
+
 	// Initial declarations
 	PetscErrorCode ierr;
 	PetscInt xs, xm;
@@ -207,6 +226,7 @@ PetscErrorCode computeTRIDYN1D(TS ts, PetscInt timestep, PetscReal time,
 
 	// Get the network
 	auto& network = solverHandler.getNetwork();
+	int dof = network.getDOF();
 
 	// Get the position of the surface
 	int surfacePos = solverHandler.getSurfacePosition();
@@ -248,7 +268,7 @@ PetscErrorCode computeTRIDYN1D(TS ts, PetscInt timestep, PetscReal time,
 	// Define a dataset for concentrations.
 	// Everyone must create the dataset with the same shape.
 	constexpr auto numConcSpecies = 5;
-	constexpr auto numValsPerGridpoint = numConcSpecies + 1;
+	constexpr auto numValsPerGridpoint = numConcSpecies + 2;
 	const auto firstIdxToWrite = (surfacePos + 1);
 	const auto numGridpointsWithConcs = (Mx - firstIdxToWrite);
 	xolotlCore::HDF5File::SimpleDataSpace<2>::Dimensions concsDsetDims = {
@@ -289,6 +309,7 @@ PetscErrorCode computeTRIDYN1D(TS ts, PetscInt timestep, PetscReal time,
 			myConcs[currIdx][3] = network.getTotalAtomConcentration(2);
 			myConcs[currIdx][4] = network.getTotalVConcentration();
 			myConcs[currIdx][5] = network.getTotalIConcentration();
+			myConcs[currIdx][6] = gridPointSolution[dof-1];
 		}
 	}
 
@@ -312,7 +333,8 @@ PetscErrorCode computeTRIDYN1D(TS ts, PetscInt timestep, PetscReal time,
 PetscErrorCode startStop1D(TS ts, PetscInt timestep, PetscReal time,
 		Vec solution, void *) {
 
-	startStopTimer->start();
+	xperf::ScopedTimer myTimer(startStopTimer);
+
 	// Initial declaration
 	PetscErrorCode ierr;
 	const double **solutionArray, *gridPointSolution;
@@ -324,13 +346,15 @@ PetscErrorCode startStop1D(TS ts, PetscInt timestep, PetscReal time,
 	double dt = time - previousTime;
 
 	// Don't do anything if it is not on the stride
-	if ((int) ((time + dt / 10.0) / hdf5Stride1D) <= hdf5Previous1D) {
-		startStopTimer->stop();
+	if (((int) ((time + dt / 10.0) / hdf5Stride1D) <= hdf5Previous1D)
+			&& timestep > 0) {
 		PetscFunctionReturn(0);
 	}
 
 	// Update the previous time
-	hdf5Previous1D++;
+	if ((int) ((time + dt / 10.0) / hdf5Stride1D) > hdf5Previous1D)
+		hdf5Previous1D++;
+
 
 	// Get the number of processes
 	int worldSize;
@@ -388,9 +412,11 @@ PetscErrorCode startStop1D(TS ts, PetscInt timestep, PetscReal time,
 	auto tsGroup = concGroup->addTimestepGroup(timestep, time, previousTime,
 			currentTimeStep);
 
-	// Write the surface positions and the associated interstitial quantities
-	// in the concentration sub group
-	tsGroup->writeSurface1D(surfacePos, nInterstitial1D, previousIFlux1D);
+	if (solverHandler.moveSurface()) {
+		// Write the surface positions and the associated interstitial quantities
+		// in the concentration sub group
+		tsGroup->writeSurface1D(surfacePos, nInterstitial1D, previousIFlux1D);
+	}
 
 	// Write the bottom impurity information if the bottom is a free surface
 	if (solverHandler.getRightOffset() == 1)
@@ -426,7 +452,6 @@ PetscErrorCode startStop1D(TS ts, PetscInt timestep, PetscReal time,
 	ierr = computeTRIDYN1D(ts, timestep, time, solution, NULL);
 	CHKERRQ(ierr);
 
-	startStopTimer->stop();
 	PetscFunctionReturn(0);
 }
 
@@ -437,6 +462,8 @@ PetscErrorCode startStop1D(TS ts, PetscInt timestep, PetscReal time,
  */
 PetscErrorCode computeHeliumRetention1D(TS ts, PetscInt, PetscReal time,
 		Vec solution, void *) {
+
+	xperf::ScopedTimer myTimer(heRetentionTimer);
 
 	// Initial declarations
 	PetscErrorCode ierr;
@@ -512,16 +539,19 @@ PetscErrorCode computeHeliumRetention1D(TS ts, PetscInt, PetscReal time,
 	int procId;
 	MPI_Comm_rank(PETSC_COMM_WORLD, &procId);
 
-	// Sum all the concentrations through MPI reduce
-	double totalHeConcentration = 0.0;
-	MPI_Reduce(&heConcentration, &totalHeConcentration, 1, MPI_DOUBLE, MPI_SUM,
-			0, PETSC_COMM_WORLD);
-	double totalDConcentration = 0.0;
-	MPI_Reduce(&dConcentration, &totalDConcentration, 1, MPI_DOUBLE, MPI_SUM, 0,
-	MPI_COMM_WORLD);
-	double totalTConcentration = 0.0;
-	MPI_Reduce(&tConcentration, &totalTConcentration, 1, MPI_DOUBLE, MPI_SUM, 0,
-	MPI_COMM_WORLD);
+	// Determine total concentrations for He, D, T.
+	std::array<double, 3> myConcData { heConcentration, dConcentration,
+			tConcentration };
+	std::array<double, 3> totalConcData;
+
+	MPI_Reduce(myConcData.data(), totalConcData.data(), myConcData.size(),
+	MPI_DOUBLE,
+	MPI_SUM, 0, PETSC_COMM_WORLD);
+
+	// Extract total He, D, T concentrations.  Values are valid only on rank 0.
+	double totalHeConcentration = totalConcData[0];
+	double totalDConcentration = totalConcData[1];
+	double totalTConcentration = totalConcData[2];
 
 	// Look at the fluxes going in the bulk if the bottom is a free surface
 	if (solverHandler.getRightOffset() == 1) {
@@ -607,18 +637,27 @@ PetscErrorCode computeHeliumRetention1D(TS ts, PetscInt, PetscReal time,
 		}
 
 		// Get which processor will send the information
+		// TODO do we need to do this allreduce just to figure out
+		// who owns the data?
+		// And is it supposed to be a sum?   Why not a min?
 		int bottomId = 0;
 		MPI_Allreduce(&bottomProc, &bottomId, 1, MPI_INT, MPI_SUM,
 				PETSC_COMM_WORLD);
 
 		// Send the information about impurities
 		// to the other processes
-		MPI_Bcast(&nHelium1D, 1, MPI_DOUBLE, bottomId, PETSC_COMM_WORLD);
-		MPI_Bcast(&previousHeFlux1D, 1, MPI_DOUBLE, bottomId, PETSC_COMM_WORLD);
-		MPI_Bcast(&nDeuterium1D, 1, MPI_DOUBLE, bottomId, PETSC_COMM_WORLD);
-		MPI_Bcast(&previousDFlux1D, 1, MPI_DOUBLE, bottomId, PETSC_COMM_WORLD);
-		MPI_Bcast(&nTritium1D, 1, MPI_DOUBLE, bottomId, PETSC_COMM_WORLD);
-		MPI_Bcast(&previousTFlux1D, 1, MPI_DOUBLE, bottomId, PETSC_COMM_WORLD);
+		std::array<double, 6> countFluxData { nHelium1D, previousHeFlux1D,
+				nDeuterium1D, previousDFlux1D, nTritium1D, previousTFlux1D };
+		MPI_Bcast(countFluxData.data(), countFluxData.size(), MPI_DOUBLE,
+				bottomId, PETSC_COMM_WORLD);
+
+		// Extract inpurity data from broadcast buffer.
+		nHelium1D = countFluxData[0];
+		previousHeFlux1D = countFluxData[1];
+		nDeuterium1D = countFluxData[2];
+		previousDFlux1D = countFluxData[3];
+		nTritium1D = countFluxData[4];
+		previousTFlux1D = countFluxData[5];
 	}
 
 	// Master process
@@ -657,6 +696,8 @@ PetscErrorCode computeHeliumRetention1D(TS ts, PetscInt, PetscReal time,
  */
 PetscErrorCode computeXenonRetention1D(TS ts, PetscInt, PetscReal time,
 		Vec solution, void *) {
+
+	xperf::ScopedTimer myTimer(xeRetentionTimer);
 
 	// Initial declarations
 	PetscErrorCode ierr;
@@ -796,6 +837,8 @@ PetscErrorCode computeXenonRetention1D(TS ts, PetscInt, PetscReal time,
 PetscErrorCode computeHeliumConc1D(TS ts, PetscInt timestep, PetscReal time,
 		Vec solution, void *ictx) {
 
+	xperf::ScopedTimer myTimer(heConcTimer);
+
 	// Initial declarations
 	PetscErrorCode ierr;
 	PetscInt xs, xm;
@@ -896,7 +939,7 @@ PetscErrorCode computeHeliumConc1D(TS ts, PetscInt timestep, PetscReal time,
 						if (!superCluster.isIn(i, 0, 0, j))
 							continue;
 						heConcLocal[i] += superCluster.getConcentration(
-								superCluster.getDistance(i, 0),
+								superCluster.getDistance(i, 0), 0, 0,
 								superCluster.getDistance(j, 3))
 								* (grid[xi + 1] - grid[xi]);
 					}
@@ -942,6 +985,8 @@ PetscErrorCode computeHeliumConc1D(TS ts, PetscInt timestep, PetscReal time,
  */
 PetscErrorCode computeCumulativeHelium1D(TS ts, PetscInt timestep,
 		PetscReal time, Vec solution, void *ictx) {
+
+	xperf::ScopedTimer myTimer(cumHeTimer);
 
 	// Initial declarations
 	PetscErrorCode ierr;
@@ -1060,6 +1105,8 @@ PetscErrorCode computeCumulativeHelium1D(TS ts, PetscInt timestep,
 PetscErrorCode monitorScatter1D(TS ts, PetscInt timestep, PetscReal time,
 		Vec solution, void *) {
 
+	xperf::ScopedTimer myTimer(scatterTimer);
+
 	// Initial declarations
 	PetscErrorCode ierr;
 	double **solutionArray, *gridPointSolution;
@@ -1068,7 +1115,7 @@ PetscErrorCode monitorScatter1D(TS ts, PetscInt timestep, PetscReal time,
 	PetscFunctionBeginUser;
 
 	// Don't do anything if it is not on the stride
-	if (timestep % 10 != 0)
+	if (timestep % 200 != 0)
 		PetscFunctionReturn(0);
 
 	// Get the number of processes
@@ -1132,31 +1179,32 @@ PetscErrorCode monitorScatter1D(TS ts, PetscInt timestep, PetscReal time,
 				aPoint.x = (double) i + 1.0;
 				myPoints->push_back(aPoint);
 			}
-			int nXe = networkSize - superClusters.size() + 1;
 
 			// Loop on the super clusters
-			for (auto const& superMapItem : superClusters) {
-				// Get the cluster
-				auto const& cluster =
-						static_cast<NESuperCluster&>(*(superMapItem.second));
-				// Get the width
-				int width = cluster.getSectionWidth();
-				// Loop on the width
-				for (int k = 0; k < width; k++) {
-					// Compute the distance
-					double dist = cluster.getDistance(nXe + k);
-					// Create a Point with the concentration[i] as the value
-					// and add it to myPoints
-					xolotlViz::Point aPoint;
-					aPoint.value = cluster.getConcentration(dist);
-					aPoint.t = time;
-					aPoint.x = (double) nXe + k;
-					myPoints->push_back(aPoint);
-				}
+			auto& allReactants = network.getAll();
+			std::for_each(allReactants.begin(), allReactants.end(),
+					[&time,&myPoints](IReactant& currReactant) {
 
-				// update nXe
-				nXe += width;
-			}
+						if (currReactant.getType() == ReactantType::NESuper) {
+							auto& cluster = static_cast<NESuperCluster&>(currReactant);
+							// Get the width and average
+							int width = cluster.getSectionWidth();
+							double nXe = cluster.getAverage();
+							// Loop on the width
+							for (int k = nXe + 1.0 - (double) width / 2.0;
+									k < nXe + (double) width / 2.0; k++) {
+								// Compute the distance
+								double dist = cluster.getDistance(k);
+								// Create a Point with the concentration[i] as the value
+								// and add it to myPoints
+								xolotlViz::Point aPoint;
+								aPoint.value = cluster.getConcentration(dist);
+								aPoint.t = time;
+								aPoint.x = (double) k;
+								myPoints->push_back(aPoint);
+							}
+						}
+					});
 		}
 
 		// else receive the values from another process
@@ -1173,32 +1221,33 @@ PetscErrorCode monitorScatter1D(TS ts, PetscInt timestep, PetscReal time,
 				aPoint.x = (double) i + 1.0;
 				myPoints->push_back(aPoint);
 			}
-			int nXe = networkSize - superClusters.size() + 1;
 
 			// Loop on the super clusters
-			for (auto const& superMapItem : superClusters) {
-				// Get the cluster
-				auto const& cluster =
-						static_cast<NESuperCluster&>(*(superMapItem.second));
-				// Get the width
-				int width = cluster.getSectionWidth();
-				// Loop on the width
-				for (int k = 0; k < width; k++) {
-					double conc = 0.0;
-					MPI_Recv(&conc, 1, MPI_DOUBLE, MPI_ANY_SOURCE, 11,
-							MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-					// Create a Point with conc as the value
-					// and add it to myPoints
-					xolotlViz::Point aPoint;
-					aPoint.value = conc;
-					aPoint.t = time;
-					aPoint.x = (double) nXe + k;
-					myPoints->push_back(aPoint);
-				}
+			auto& allReactants = network.getAll();
+			std::for_each(allReactants.begin(), allReactants.end(),
+					[&time,&myPoints](IReactant& currReactant) {
 
-				// update nXe
-				nXe += width;
-			}
+						if (currReactant.getType() == ReactantType::NESuper) {
+							auto& cluster = static_cast<NESuperCluster&>(currReactant);
+							// Get the width and average
+							int width = cluster.getSectionWidth();
+							double nXe = cluster.getAverage();
+							// Loop on the width
+							for (int k = nXe + 1.0 - (double) width / 2.0;
+									k < nXe + (double) width / 2.0; k++) {
+								double conc = 0.0;
+								MPI_Recv(&conc, 1, MPI_DOUBLE, MPI_ANY_SOURCE, 11,
+										MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+								// Create a Point with conc as the value
+								// and add it to myPoints
+								xolotlViz::Point aPoint;
+								aPoint.value = conc;
+								aPoint.t = time;
+								aPoint.x = (double) k;
+								myPoints->push_back(aPoint);
+							}
+						}
+					});
 		}
 
 		// Get the data provider and give it the points
@@ -1240,27 +1289,27 @@ PetscErrorCode monitorScatter1D(TS ts, PetscInt timestep, PetscReal time,
 				MPI_Send(&gridPointSolution[i], 1, MPI_DOUBLE, 0, 10,
 						MPI_COMM_WORLD);
 			}
-			int nXe = networkSize - superClusters.size() + 1;
 
 			// Loop on the super clusters
-			for (auto const& superMapItem : superClusters) {
-				// Get the cluster
-				auto const& cluster =
-						static_cast<NESuperCluster&>(*(superMapItem.second));
-				// Get the width
-				int width = cluster.getSectionWidth();
-				// Loop on the width
-				for (int k = 0; k < width; k++) {
-					// Compute the distance
-					double dist = cluster.getDistance(nXe + k);
-					double conc = cluster.getConcentration(dist);
-					// Send the value of each concentration to the master process
-					MPI_Send(&conc, 1, MPI_DOUBLE, 0, 11, MPI_COMM_WORLD);
-				}
+			auto& allReactants = network.getAll();
+			std::for_each(allReactants.begin(), allReactants.end(),
+					[](IReactant& currReactant) {
 
-				// update nXe
-				nXe += width;
-			}
+						if (currReactant.getType() == ReactantType::NESuper) {
+							auto& cluster = static_cast<NESuperCluster&>(currReactant);
+							// Get the width and average
+							int width = cluster.getSectionWidth();
+							double nXe = cluster.getAverage();
+							// Loop on the width
+							for (int k = nXe + 1.0 - (double) width / 2.0; k < nXe + (double) width / 2.0; k++) {
+								// Compute the distance
+								double dist = cluster.getDistance(k);
+								double conc = cluster.getConcentration(dist);
+								// Send the value of each concentration to the master process
+								MPI_Send(&conc, 1, MPI_DOUBLE, 0, 11, MPI_COMM_WORLD);
+							}
+						}
+					});
 		}
 	}
 
@@ -1278,6 +1327,8 @@ PetscErrorCode monitorScatter1D(TS ts, PetscInt timestep, PetscReal time,
  */
 PetscErrorCode monitorSeries1D(TS ts, PetscInt timestep, PetscReal time,
 		Vec solution, void *) {
+
+	xperf::ScopedTimer myTimer(seriesTimer);
 
 	// Initial declarations
 	PetscErrorCode ierr;
@@ -1451,6 +1502,8 @@ PetscErrorCode monitorSeries1D(TS ts, PetscInt timestep, PetscReal time,
 PetscErrorCode monitorSurface1D(TS ts, PetscInt timestep, PetscReal time,
 		Vec solution, void *) {
 
+	xperf::ScopedTimer myTimer(surfaceTimer);
+
 	// Initial declarations
 	PetscErrorCode ierr;
 	const double **solutionArray, *gridPointSolution;
@@ -1494,7 +1547,7 @@ PetscErrorCode monitorSurface1D(TS ts, PetscInt timestep, PetscReal time,
 	// Loop on the grid points
 	for (xi = xs; xi < xs + xm; xi++) {
 
-		if (xi != 5)
+		if (xi != 20)
 			continue;
 
 		// Create a Point vector to store the data to give to the data provider
@@ -1555,7 +1608,7 @@ PetscErrorCode monitorSurface1D(TS ts, PetscInt timestep, PetscReal time,
 							// Is it the right one?
 							if (heBounds.contains(j) and vBounds.contains(i)) {
 								conc = superCluster.getConcentration(
-										superCluster.getDistance(j, 0),
+										superCluster.getDistance(j, 0), 0, 0,
 										superCluster.getDistance(i, 3));
 								break;
 							}
@@ -1617,6 +1670,8 @@ PetscErrorCode monitorSurface1D(TS ts, PetscInt timestep, PetscReal time,
  */
 PetscErrorCode monitorMeanSize1D(TS ts, PetscInt timestep, PetscReal time,
 		Vec solution, void *ictx) {
+
+	xperf::ScopedTimer myTimer(meanSizeTimer);
 
 	// Initial declaration
 	PetscErrorCode ierr;
@@ -1740,6 +1795,8 @@ PetscErrorCode monitorMeanSize1D(TS ts, PetscInt timestep, PetscReal time,
 PetscErrorCode monitorMaxClusterConc1D(TS ts, PetscInt timestep, PetscReal time,
 		Vec solution, void *) {
 
+	xperf::ScopedTimer myTimer(maxClusterConcTimer);
+
 	// Initial declarations
 	PetscErrorCode ierr;
 	const double **solutionArray, *gridPointSolution;
@@ -1851,6 +1908,8 @@ PetscErrorCode monitorMaxClusterConc1D(TS ts, PetscInt timestep, PetscReal time,
 PetscErrorCode eventFunction1D(TS ts, PetscReal time, Vec solution,
 		PetscScalar *fvalue, void *) {
 
+	xperf::ScopedTimer myTimer(eventFuncTimer);
+
 	// Initial declaration
 	PetscErrorCode ierr;
 	double **solutionArray, *gridPointSolution;
@@ -1859,7 +1918,6 @@ PetscErrorCode eventFunction1D(TS ts, PetscReal time, Vec solution,
 	fvalue[0] = 1.0, fvalue[1] = 1.0, fvalue[2] = 1.0;
 
 	PetscFunctionBeginUser;
-	eventTimer->start();
 
 	// Gets the process ID
 	int procId;
@@ -2025,22 +2083,13 @@ PetscErrorCode eventFunction1D(TS ts, PetscReal time, Vec solution,
 				// Compute the radius of the bubble from the number of helium
 				double nV = heDensity * (grid[xi + 1] - grid[xi]) / 4.0;
 //			double nV = pow(heDensity / 5.0, 1.163) * (grid[xi + 1] - grid[xi]);
-				double radius =
-						(sqrt(3.0) / 4.0) * xolotlCore::tungstenLatticeConstant
-								+ pow(
-										(3.0
-												* pow(
-														xolotlCore::tungstenLatticeConstant,
-														3.0) * nV)
-												/ (8.0 * xolotlCore::pi),
-										(1.0 / 3.0))
-								- pow(
-										(3.0
-												* pow(
-														xolotlCore::tungstenLatticeConstant,
-														3.0))
-												/ (8.0 * xolotlCore::pi),
-										(1.0 / 3.0));
+				constexpr double tlcCubed = xolotlCore::tungstenLatticeConstant
+						* xolotlCore::tungstenLatticeConstant
+						* xolotlCore::tungstenLatticeConstant;
+				double radius = (sqrt(3.0) / 4)
+						* xolotlCore::tungstenLatticeConstant
+						+ cbrt((3.0 * tlcCubed * nV) / (8.0 * xolotlCore::pi))
+						- cbrt((3.0 * tlcCubed) / (8.0 * xolotlCore::pi));
 
 				// If the radius is larger than the distance to the surface, burst
 				if (radius > distance) {
@@ -2075,7 +2124,6 @@ PetscErrorCode eventFunction1D(TS ts, PetscReal time, Vec solution,
 	ierr = DMDAVecRestoreArrayDOFRead(da, solution, &solutionArray);
 	CHKERRQ(ierr);
 
-	eventTimer->stop();
 	PetscFunctionReturn(0);
 }
 
@@ -2087,17 +2135,17 @@ PetscErrorCode eventFunction1D(TS ts, PetscReal time, Vec solution,
 PetscErrorCode postEventFunction1D(TS ts, PetscInt nevents,
 		PetscInt eventList[], PetscReal time, Vec solution, PetscBool, void*) {
 
+	xperf::ScopedTimer myTimer(postEventFuncTimer);
+
 	// Initial declaration
 	PetscErrorCode ierr;
 	double **solutionArray, *gridPointSolution;
 	PetscInt xs, xm, xi;
 
 	PetscFunctionBeginUser;
-	postEventTimer->start();
 
 	// Check if the surface has moved
 	if (nevents == 0) {
-		postEventTimer->stop();
 		PetscFunctionReturn(0);
 	}
 
@@ -2236,7 +2284,6 @@ PetscErrorCode postEventFunction1D(TS ts, PetscInt nevents,
 		ierr = DMDAVecRestoreArrayDOF(da, solution, &solutionArray);
 		CHKERRQ(ierr);
 
-		postEventTimer->stop();
 		PetscFunctionReturn(0);
 	}
 
@@ -2384,7 +2431,6 @@ PetscErrorCode postEventFunction1D(TS ts, PetscInt nevents,
 	ierr = DMDAVecRestoreArrayDOF(da, solution, &solutionArray);
 	CHKERRQ(ierr);
 
-	postEventTimer->stop();
 	PetscFunctionReturn(0);
 }
 
@@ -2398,6 +2444,24 @@ PetscErrorCode setupPetsc1DMonitor(TS ts,
 		std::shared_ptr<xolotlPerf::IHandlerRegistry> handlerRegistry) {
 
 	PetscErrorCode ierr;
+
+	// Initialize the timers, including the one for this function.
+	initTimer = handlerRegistry->getTimer("monitor1D:init");
+	xperf::ScopedTimer myTimer(initTimer);
+	checkNegativeTimer = handlerRegistry->getTimer("monitor1D:checkNeg");
+	tridynTimer = handlerRegistry->getTimer("monitor1D:tridyn");
+	startStopTimer = handlerRegistry->getTimer("monitor1D:startStop");
+	heRetentionTimer = handlerRegistry->getTimer("monitor1D:heRet");
+	xeRetentionTimer = handlerRegistry->getTimer("monitor1D:xeRet");
+	heConcTimer = handlerRegistry->getTimer("monitor1D:heConc");
+	cumHeTimer = handlerRegistry->getTimer("monitor1D:cumHe");
+	scatterTimer = handlerRegistry->getTimer("monitor1D:scatter");
+	seriesTimer = handlerRegistry->getTimer("monitor1D:series");
+	surfaceTimer = handlerRegistry->getTimer("monitor1D:surface");
+	meanSizeTimer = handlerRegistry->getTimer("monitor1D:meanSize");
+	maxClusterConcTimer = handlerRegistry->getTimer("monitor1D:maxClusterConc");
+	eventFuncTimer = handlerRegistry->getTimer("monitor1D:event");
+	postEventFuncTimer = handlerRegistry->getTimer("monitor1D:postEvent");
 
 	// Get the process ID
 	int procId;
@@ -2483,11 +2547,6 @@ PetscErrorCode setupPetsc1DMonitor(TS ts,
 	ierr = PetscOptionsHasName(NULL, NULL, "-tridyn", &flagTRIDYN);
 	checkPetscError(ierr,
 			"setupPetsc1DMonitor: PetscOptionsHasName (-tridyn) failed.");
-
-	// Initialize the timers
-	startStopTimer = handlerRegistry->getTimer("monitor1D:startStop");
-	eventTimer = handlerRegistry->getTimer("monitor1D:event");
-	postEventTimer = handlerRegistry->getTimer("monitor1D:postEvent");
 
 	// Get the solver handler
 	auto& solverHandler = PetscSolver::getSolverHandler();

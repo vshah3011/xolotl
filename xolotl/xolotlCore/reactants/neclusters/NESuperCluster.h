@@ -275,13 +275,11 @@ public:
 	 * This operation returns the current concentration.
 	 *
 	 * @param distXe The xenon distance in the group
-	 * @param distB Unused here
-	 * @param distC Unused here
-	 * @param distD Unused here
 	 * @return The concentration of this reactant
 	 */
-	double getConcentration(double distXe, double distB = 0.0, double distC =
-			0.0, double distD = 0.0) const override;
+	double getConcentration(double distXe) const override {
+		return l0 + (distXe * l1);
+	}
 
 	/**
 	 * This operation returns the first xenon moment.
@@ -316,6 +314,13 @@ public:
 	 * Calculate the dispersion of the group.
 	 */
 	void computeDispersion();
+
+	/**
+	 * Get the dispersion of the group.
+	 */
+	double getDispersion() const {
+		return dispersion;
+	}
 
 	/**
 	 * This operation sets the zeroth order moment.
@@ -515,6 +520,17 @@ public:
 	 */
 	int getSectionWidth() const {
 		return sectionWidth;
+	}
+
+	/**
+	 * Detect if given coordinates are in this cluster's group.
+	 *
+	 * @param _nXe number of Xe of interest.
+	 * @return True if the coordinates are contained in our super cluster.
+	 */
+	bool isIn(IReactant::SizeType nXe) const {
+		return (nXe > numXe - (double) sectionWidth / 2.0
+				&& nXe < numXe + (double) sectionWidth / 2.0);
 	}
 
 };
