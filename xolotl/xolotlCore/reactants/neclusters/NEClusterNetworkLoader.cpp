@@ -6,6 +6,7 @@
 #include <NEXeCluster.h>
 #include <NESuperCluster.h>
 #include <xolotlPerf.h>
+#include <TokenizedLineReader.h>
 #include "xolotlCore/io/XFile.h"
 
 namespace xolotlCore {
@@ -219,6 +220,30 @@ std::unique_ptr<IReactionNetwork> NEClusterNetworkLoader::generate(
 
 		// Save it in the network
 		pushNECluster(network, reactants, nextCluster);
+	}
+
+	// Read input file for migration energies if it is present
+	std::ifstream migrationFile;
+	migrationFile.open("migration.txt");
+	if (migrationFile.good()) {
+		// Print a message to say we found the file and we are reading from it
+		int procId;
+		MPI_Comm_rank(MPI_COMM_WORLD, &procId);
+		if (procId == 0)
+			std::cout << "Found migration.txt, the energy is: ";
+		// Build an input stream from the string
+		xolotlCore::TokenizedLineReader<double> reader;
+		// Get the line
+		std::string line;
+		// The only one is Xe_1
+		getline(migrationFile, line);
+		auto lineSS = std::make_shared<std::istringstream>(line);
+		reader.setInputStream(lineSS);
+		auto tokens = reader.loadLine();
+		auto cluster = network->get(Species::Xe, 1);
+		cluster->setMigrationEnergy(tokens[0]);
+		if (procId == 0)
+			std::cout << tokens[0] << " eV" << std::endl;
 	}
 
 	// Set the network for all of the reactants. This MUST be done manually.
