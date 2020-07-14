@@ -26,11 +26,15 @@ public:
 	using Region = typename NetworkType::Region;
 	using Composition = typename NetworkType::Composition;
 	using AmountType = typename NetworkType::AmountType;
+	using IndexType = typename NetworkType::IndexType;
 	using BoolArray = typename Superclass::BoolVec<Region>;
 
 	PSIClusterGenerator(const options::IOptions& opts);
 
 	PSIClusterGenerator(const options::IOptions& opts, std::size_t refineDepth);
+
+	void
+	readDiffusivities(const std::string filename = "diff.dat");
 
 	KOKKOS_INLINE_FUNCTION
 	bool
@@ -81,9 +85,12 @@ private:
 	AmountType _maxD{1};
 	AmountType _maxT{1};
 	AmountType _maxV{0};
+	// Grouping parameters
 	AmountType _groupingMin;
 	AmountType _groupingWidthA;
 	AmountType _groupingWidthB;
+	// Diffusivities
+	Kokkos::View<double**> _diffusivities;
 };
 } // namespace network
 } // namespace core

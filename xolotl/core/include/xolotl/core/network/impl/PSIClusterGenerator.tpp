@@ -2,6 +2,7 @@
 
 #include <xolotl/core/Constants.h>
 #include <xolotl/util/MathUtils.h>
+#include <xolotl/util/TokenizedLineReader.h>
 
 namespace xolotl
 {
@@ -20,6 +21,7 @@ PSIClusterGenerator<PSIFullSpeciesList>::PSIClusterGenerator(
 	_groupingWidthA(opts.getGroupingWidthA()),
 	_groupingWidthB(opts.getGroupingWidthB())
 {
+	readDiffusivities();
 }
 
 PSIClusterGenerator<PSIFullSpeciesList>::PSIClusterGenerator(
@@ -34,6 +36,50 @@ PSIClusterGenerator<PSIFullSpeciesList>::PSIClusterGenerator(
 	_groupingWidthA(opts.getGroupingWidthA()),
 	_groupingWidthB(opts.getGroupingWidthB())
 {
+}
+
+void
+PSIClusterGenerator<PSIFullSpeciesList>::readDiffusivities(
+	const std::string filename)
+{
+	// Read the HeV diffusivities from a file
+	std::ifstream diffFile;
+	diffFile.open(filename);
+	if (!diffFile.good()) {
+		_diffusivities = Kokkos::View<double**>("diffusivities", 0, 0);
+		return;
+	}
+	_diffusivities = Kokkos::View<double**>(
+		"diffusivities", _maxV + 1, getMaxHePerV(_maxV) + 1);
+	auto diffusivities = Kokkos::create_mirror_view(_diffusivities);
+	// Initialize to 0.0
+	for (IndexType i = 0; i <= _maxV; i++)
+		for (IndexType j = 0; j <= getMaxHePerV(_maxV); j++) {
+			diffusivities(i, j) = 0.0;
+		}
+	// Build an input stream from the string
+	util::TokenizedLineReader<double> reader;
+	// Get the line
+	std::string line;
+	getline(diffFile, line);
+	auto lineSS = std::make_shared<std::istringstream>(line);
+	reader.setInputStream(lineSS);
+	// Read the first line
+	auto tokens = reader.loadLine();
+	// And start looping on the lines
+	while (tokens.size() > 0) {
+		if (tokens[0] <= _maxV && tokens[1] <= getMaxHePerV(_maxV)) {
+			diffusivities(static_cast<IndexType>(tokens[0]),
+				static_cast<IndexType>(tokens[1])) =
+				tokens[2] * 1.0e18; // to nm2 conversion
+		}
+		getline(diffFile, line);
+		lineSS = std::make_shared<std::istringstream>(line);
+		reader.setInputStream(lineSS);
+		tokens = reader.loadLine();
+	}
+
+	deep_copy(_diffusivities, diffusivities);
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -380,6 +426,11 @@ PSIClusterGenerator<PSIFullSpeciesList>::getMigrationEnergy(
 				migrationEnergy = vOneMigration;
 			}
 		}
+		// HeV
+		else if (_diffusivities.extent(0) > 0 && comp[Species::V] > 0 &&
+			comp[Species::He] > 0) {
+			migrationEnergy = 0.0;
+		}
 	}
 	return migrationEnergy;
 }
@@ -436,6 +487,14 @@ PSIClusterGenerator<PSIFullSpeciesList>::getDiffusionFactor(
 			if (comp[Species::V] == 1) {
 				diffusionFactor = vOneDiffusion;
 			}
+		}
+		// HeV
+		else if (_diffusivities.extent(0) > 0 && comp[Species::V] > 0 &&
+			comp[Species::He] > 0) {
+			diffusionFactor =
+				_diffusivities(comp[Species::V], comp[Species::He]);
+			//			std::cout << comp[Species::V] << " " << comp[Species::He] <<
+			//" " << diffusionFactor << std::endl;
 		}
 	}
 
