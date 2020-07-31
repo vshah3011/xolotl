@@ -1,5 +1,6 @@
 // Includes
 #include <xolotl/core/Constants.h>
+#include <xolotl/core/network/NEReactionNetwork.h>
 #include <xolotl/core/network/PSIReactionNetwork.h>
 #include <xolotl/solver/handler/PetscSolver2DHandler.h>
 #include <xolotl/util/MathUtils.h>
@@ -305,6 +306,11 @@ PetscSolver2DHandler::initGBLocation(DM& da, Vec& C)
 	// + the super clusters
 	const int dof = network.getDOF();
 
+	// Need to use the NE network here
+	using NetworkType = core::network::NEReactionNetwork;
+	using Spec = typename NetworkType::Species;
+	auto& neNetwork = dynamic_cast<NetworkType&>(network);
+
 	// Loop on the GB
 	for (auto const& pair : gbVector) {
 		// Get the coordinate of the point
@@ -316,8 +322,19 @@ PetscSolver2DHandler::initGBLocation(DM& da, Vec& C)
 			// Get the local concentration
 			concOffset = concentrations[yj][xi];
 
+			using HostUnmanaged = Kokkos::View<double*, Kokkos::HostSpace,
+				Kokkos::MemoryUnmanaged>;
+			auto hConcs = HostUnmanaged(concOffset, dof);
+			auto dConcs = Kokkos::View<double*>("Concentrations", dof);
+			deep_copy(dConcs, hConcs);
+
+			// Transfer the local amount of Xe clusters
+			setLocalXeRate(
+				neNetwork.getTotalAtomConcentration(dConcs, Spec::Xe, 1),
+				xi - localXS, yj - localYS);
+
 			// Loop on all the clusters to initialize at 0.0
-			for (int n = 0; n < dof - 1; n++) {
+			for (int n = 0; n < dof; n++) {
 				concOffset[n] = 0.0;
 			}
 		}
@@ -366,7 +383,7 @@ PetscSolver2DHandler::getConcVector(DM& da, Vec& C)
 
 			// Create the temporary vector for this grid point
 			std::vector<std::pair<int, double>> tempVector;
-			for (auto l = 0; l < dof; ++l) {
+			for (auto l = 0; l < dof + 1; ++l) {
 				if (std::fabs(gridPointSolution[l]) > 1.0e-16) {
 					tempVector.push_back(
 						std::make_pair(l, gridPointSolution[l]));
@@ -780,11 +797,11 @@ PetscSolver2DHandler::updateConcentration(
 			// the grid -----
 			using HostUnmanaged = Kokkos::View<double*, Kokkos::HostSpace,
 				Kokkos::MemoryUnmanaged>;
-			auto hConcs = HostUnmanaged(concOffset, dof + 1);
-			auto dConcs = Kokkos::View<double*>("Concentrations", dof + 1);
+			auto hConcs = HostUnmanaged(concOffset, dof);
+			auto dConcs = Kokkos::View<double*>("Concentrations", dof);
 			deep_copy(dConcs, hConcs);
-			auto hFlux = HostUnmanaged(updatedConcOffset, dof + 1);
-			auto dFlux = Kokkos::View<double*>("Fluxes", dof + 1);
+			auto hFlux = HostUnmanaged(updatedConcOffset, dof);
+			auto dFlux = Kokkos::View<double*>("Fluxes", dof);
 			deep_copy(dFlux, hFlux);
 			fluxCounter->increment();
 			fluxTimer->start();
@@ -1221,8 +1238,8 @@ PetscSolver2DHandler::computeJacobian(
 			// Compute all the partial derivatives for the reactions
 			using HostUnmanaged = Kokkos::View<double*, Kokkos::HostSpace,
 				Kokkos::MemoryUnmanaged>;
-			auto hConcs = HostUnmanaged(concOffset, dof + 1);
-			auto dConcs = Kokkos::View<double*>("Concentrations", dof + 1);
+			auto hConcs = HostUnmanaged(concOffset, dof);
+			auto dConcs = Kokkos::View<double*>("Concentrations", dof);
 			deep_copy(dConcs, hConcs);
 			partialDerivativeCounter->increment();
 			partialDerivativeTimer->start();

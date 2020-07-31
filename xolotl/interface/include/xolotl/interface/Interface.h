@@ -19,7 +19,7 @@ class IReactionNetwork;
 } // namespace core
 namespace solver
 {
-class Solver;
+class ISolver;
 }
 
 namespace interface
@@ -33,9 +33,9 @@ class XolotlInterface
 {
 private:
 	/**
-	 * Have we initialized xolotl?
+	 * Did this object initialize xolotl?
 	 */
-	bool initialized{false};
+	bool initializedHere{false};
 
 	/**
 	 * The MPI and Kokkos environment
@@ -45,7 +45,7 @@ private:
 	/**
 	 * The solver
 	 */
-	std::shared_ptr<solver::Solver> solver;
+	std::shared_ptr<solver::ISolver> solver;
 
 public:
 	/**

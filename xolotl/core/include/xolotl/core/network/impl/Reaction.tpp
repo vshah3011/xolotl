@@ -68,47 +68,47 @@ Reaction<TNetwork, TDerived>::computeOverlap(const ReflectedRegion& cl1RR,
 		nOverlap *= _widths(i());
 	}
 
-	//	if (nOverlap <= 0) {
-	//		std::cout << "first reactant: ";
-	//		for (auto i : speciesRangeNoI) {
-	//			std::cout << cl1RR[i()].begin() << ", ";
+	//		if (nOverlap <= 0) {
+	//			std::cout << "first reactant: ";
+	//			for (auto i : speciesRangeNoI) {
+	//				std::cout << cl1RR[i()].begin() << ", ";
+	//			}
+	//			std::cout << std::endl;
+	//			for (auto i : speciesRangeNoI) {
+	//				std::cout << cl1RR[i()].end() - 1 << ", ";
+	//			}
+	//			std::cout << std::endl << "second reactant: ";
+	//			for (auto i : speciesRangeNoI) {
+	//				std::cout << cl2RR[i()].begin() << ", ";
+	//			}
+	//			std::cout << std::endl;
+	//			for (auto i : speciesRangeNoI) {
+	//				std::cout << cl2RR[i()].end() - 1 << ", ";
+	//			}
+	//			std::cout << std::endl << "product: ";
+	//			for (auto i : speciesRangeNoI) {
+	//				std::cout << pr1RR[i()].begin() << ", ";
+	//			}
+	//			std::cout << std::endl;
+	//			for (auto i : speciesRangeNoI) {
+	//				std::cout << pr1RR[i()].end() - 1 << ", ";
+	//			}
+	//			std::cout << std::endl << "second product: ";
+	//			for (auto i : speciesRangeNoI) {
+	//				std::cout << pr2RR[i()].begin() << ", ";
+	//			}
+	//			std::cout << std::endl;
+	//			for (auto i : speciesRangeNoI) {
+	//				std::cout << pr2RR[i()].end() - 1 << ", ";
+	//			}
+	//			std::cout << std::endl;
+	//			std::cout << "Overlap: " << nOverlap << std::endl;
+	//			std::cout << "Widths: ";
+	//			for (auto i : speciesRangeNoI) {
+	//				std::cout << _widths(i()) << ", ";
+	//			}
+	//			std::cout << std::endl;
 	//		}
-	//		std::cout << std::endl;
-	//		for (auto i : speciesRangeNoI) {
-	//			std::cout << cl1RR[i()].end() - 1 << ", ";
-	//		}
-	//		std::cout << std::endl << "second reactant: ";
-	//		for (auto i : speciesRangeNoI) {
-	//			std::cout << cl2RR[i()].begin() << ", ";
-	//		}
-	//		std::cout << std::endl;
-	//		for (auto i : speciesRangeNoI) {
-	//			std::cout << cl2RR[i()].end() - 1 << ", ";
-	//		}
-	//		std::cout << std::endl << "product: ";
-	//		for (auto i : speciesRangeNoI) {
-	//			std::cout << pr1RR[i()].begin() << ", ";
-	//		}
-	//		std::cout << std::endl;
-	//		for (auto i : speciesRangeNoI) {
-	//			std::cout << pr1RR[i()].end() - 1 << ", ";
-	//		}
-	//		std::cout << std::endl << "second product: ";
-	//		for (auto i : speciesRangeNoI) {
-	//			std::cout << pr2RR[i()].begin() << ", ";
-	//		}
-	//		std::cout << std::endl;
-	//		for (auto i : speciesRangeNoI) {
-	//			std::cout << pr2RR[i()].end() - 1 << ", ";
-	//		}
-	//		std::cout << std::endl;
-	//		std::cout << "Overlap: " << nOverlap << std::endl;
-	//		std::cout << "Widths: ";
-	//		for (auto i : speciesRangeNoI) {
-	//			std::cout << _widths(i()) << ", ";
-	//		}
-	//		std::cout << std::endl;
-	//	}
 	assert(nOverlap > 0);
 
 	return nOverlap;
@@ -164,8 +164,12 @@ ProductionReaction<TNetwork, TDerived>::computeCoefficients()
 	const auto& pr2Reg = (_products[1] == invalidIndex) ?
 		dummyRegion :
 		this->_clusterData.getCluster(_products[1]).getRegion();
-	const auto& cl1Disp = cl1Reg.dispersion();
-	const auto& cl2Disp = cl2Reg.dispersion();
+	const auto& cl1Disp =
+		detail::getReflectedDispersionForCoefs<NetworkType::Traits::numSpecies>(
+			cl1Reg);
+	const auto& cl2Disp =
+		detail::getReflectedDispersionForCoefs<NetworkType::Traits::numSpecies>(
+			cl2Reg);
 
 	// Initialize the reflected regions
 	auto rRegions = detail::updateReflectedRegionsForCoefs<nMomentIds>(
@@ -215,8 +219,10 @@ ProductionReaction<TNetwork, TDerived>::computeCoefficients()
 			const auto& otherRR = (prodId == _products[0]) ? pr2RR : pr1RR;
 			// Get the dispersion
 			const auto& thisDispersion = (prodId == _products[0]) ?
-				pr1Reg.dispersion() :
-				pr2Reg.dispersion();
+				detail::getReflectedDispersionForCoefs<
+					NetworkType::Traits::numSpecies>(pr1Reg) :
+				detail::getReflectedDispersionForCoefs<
+					NetworkType::Traits::numSpecies>(pr2Reg);
 
 			// First order sum on the other product (p+2) because 0 and 1 are
 			// used for reactants)
@@ -248,6 +254,37 @@ ProductionReaction<TNetwork, TDerived>::computeCoefficients()
 						this->_coefs(0, i() + 1, 0, 0) *
 						this->_coefs(0, 0, p + 2, k() + 1) / nOverlap;
 				}
+			}
+		}
+	}
+
+	for (auto i : speciesRangeNoI) {
+		auto factor = nOverlap / this->_widths[i()];
+		for (auto j : speciesRangeNoI) {
+			// Second order sum
+			if (i == j) {
+				for (double m : makeIntervalRange(pr2RR[j()]))
+					for (double l : makeIntervalRange(cl1RR[j()])) {
+						this->_coefs(i() + 1, j() + 1, 0, 0) +=
+							(l -
+								static_cast<double>(
+									cl1RR[j()].end() - 1 + cl1RR[j()].begin()) /
+									2.0) *
+							factor *
+							util::firstOrderSum(
+								util::max(pr1RR[j()].begin() + m - l,
+									static_cast<double>(cl2RR[j()].begin())),
+								util::min(pr1RR[j()].end() - 1 + m - l,
+									static_cast<double>(cl2RR[j()].end() - 1)),
+								static_cast<double>(
+									cl2RR[j()].end() - 1 + cl2RR[j()].begin()) /
+									2.0);
+					}
+			}
+			else {
+				this->_coefs(i() + 1, j() + 1, 0, 0) =
+					this->_coefs(i() + 1, 0, 0, 0) *
+					this->_coefs(0, j() + 1, 0, 0) / nOverlap;
 			}
 		}
 	}
@@ -297,32 +334,6 @@ ProductionReaction<TNetwork, TDerived>::computeCoefficients()
 	for (auto i : speciesRangeNoI) {
 		auto factor = nOverlap / this->_widths[i()];
 		for (auto j : speciesRangeNoI) {
-			// Second order sum
-			if (i == j) {
-				for (double m : makeIntervalRange(pr2RR[j()]))
-					for (double l : makeIntervalRange(cl1RR[j()])) {
-						this->_coefs(i() + 1, j() + 1, 0, 0) +=
-							(l -
-								static_cast<double>(
-									cl1RR[j()].end() - 1 + cl1RR[j()].begin()) /
-									2.0) *
-							factor *
-							util::firstOrderSum(
-								util::max(pr1RR[j()].begin() + m - l,
-									static_cast<double>(cl2RR[j()].begin())),
-								util::min(pr1RR[j()].end() - 1 + m - l,
-									static_cast<double>(cl2RR[j()].end() - 1)),
-								static_cast<double>(
-									cl2RR[j()].end() - 1 + cl2RR[j()].begin()) /
-									2.0);
-					}
-			}
-			else {
-				this->_coefs(i() + 1, j() + 1, 0, 0) =
-					this->_coefs(i() + 1, 0, 0, 0) *
-					this->_coefs(0, j() + 1, 0, 0) / nOverlap;
-			}
-
 			// Now we deal with the coefficients needed for the
 			// first moments
 			// Let's start with the products
@@ -337,8 +348,10 @@ ProductionReaction<TNetwork, TDerived>::computeCoefficients()
 				const auto& otherRR = (prodId == _products[0]) ? pr2RR : pr1RR;
 				// Get the dispersion
 				const auto& thisDispersion = (prodId == _products[0]) ?
-					pr1Reg.dispersion() :
-					pr2Reg.dispersion();
+					detail::getReflectedDispersionForCoefs<
+						NetworkType::Traits::numSpecies>(pr1Reg) :
+					detail::getReflectedDispersionForCoefs<
+						NetworkType::Traits::numSpecies>(pr2Reg);
 
 				for (auto k : speciesRangeNoI) {
 					// Third order sum
@@ -380,6 +393,11 @@ ProductionReaction<TNetwork, TDerived>::computeCoefficients()
 							this->_coefs(0, j() + 1, 0, 0) *
 							this->_coefs(i() + 1, 0, p + 2, k() + 1) / nOverlap;
 					}
+					else if (i == j) {
+						this->_coefs(i() + 1, j() + 1, p + 2, k() + 1) =
+							this->_coefs(0, 0, p + 2, k() + 1) *
+							this->_coefs(i() + 1, j() + 1, 0, 0) / nOverlap;
+					}
 					else {
 						this->_coefs(i() + 1, j() + 1, p + 2, k() + 1) =
 							this->_coefs(i() + 1, 0, 0, 0) *
@@ -398,16 +416,34 @@ ProductionReaction<TNetwork, TDerived>::computeCoefficients()
 						detail::computeThirdOrderSum(
 							i(), cl2RR, cl1RR, pr1RR, pr2RR) /
 						cl1Disp[i()];
+					this->_coefs(i() + 1, j() + 1, 1, k() + 1) = factor *
+						detail::computeThirdOrderSum(
+							i(), cl1RR, cl2RR, pr1RR, pr2RR) /
+						cl2Disp[i()];
 				}
 				else if (i == k) {
 					this->_coefs(i() + 1, j() + 1, 0, k() + 1) =
 						this->_coefs(0, j() + 1, 0, 0) *
 						this->_coefs(i() + 1, 0, 0, k() + 1) / nOverlap;
+					this->_coefs(i() + 1, j() + 1, 1, k() + 1) =
+						this->_coefs(0, j() + 1, 0, 0) *
+						this->_coefs(i() + 1, 0, 1, k() + 1) / nOverlap;
 				}
 				else if (j == k) {
 					this->_coefs(i() + 1, j() + 1, 0, k() + 1) =
 						this->_coefs(i() + 1, 0, 0, 0) *
 						this->_coefs(0, j() + 1, 0, k() + 1) / nOverlap;
+					this->_coefs(i() + 1, j() + 1, 1, k() + 1) =
+						this->_coefs(i() + 1, 0, 0, 0) *
+						this->_coefs(0, j() + 1, 1, k() + 1) / nOverlap;
+				}
+				else if (i == j) {
+					this->_coefs(i() + 1, j() + 1, 0, k() + 1) =
+						this->_coefs(0, 0, 0, k() + 1) *
+						this->_coefs(i() + 1, j() + 1, 0, 0) / nOverlap;
+					this->_coefs(i() + 1, j() + 1, 1, k() + 1) =
+						this->_coefs(0, 0, 1, k() + 1) *
+						this->_coefs(i() + 1, j() + 1, 0, 0) / nOverlap;
 				}
 				else {
 					this->_coefs(i() + 1, j() + 1, 0, k() + 1) =
@@ -415,29 +451,6 @@ ProductionReaction<TNetwork, TDerived>::computeCoefficients()
 						this->_coefs(0, j() + 1, 0, 0) *
 						this->_coefs(k() + 1, 0, 0, 0) /
 						(nOverlap * nOverlap * cl1Disp[k()]);
-				}
-			}
-
-			// Let's take care of the second reactant partial derivatives
-			for (auto k : speciesRangeNoI) {
-				// Third order sum
-				if (i == j && j == k) {
-					this->_coefs(i() + 1, j() + 1, 1, k() + 1) = factor *
-						detail::computeThirdOrderSum(
-							i(), cl1RR, cl2RR, pr1RR, pr2RR) /
-						cl2Disp[i()];
-				}
-				else if (i == k) {
-					this->_coefs(i() + 1, j() + 1, 1, k() + 1) =
-						this->_coefs(0, j() + 1, 0, 0) *
-						this->_coefs(i() + 1, 0, 1, k() + 1) / nOverlap;
-				}
-				else if (j == k) {
-					this->_coefs(i() + 1, j() + 1, 1, k() + 1) =
-						this->_coefs(i() + 1, 0, 0, 0) *
-						this->_coefs(0, j() + 1, 1, k() + 1) / nOverlap;
-				}
-				else {
 					this->_coefs(i() + 1, j() + 1, 1, k() + 1) =
 						this->_coefs(i() + 1, 0, 0, 0) *
 						this->_coefs(0, j() + 1, 0, 0) *
@@ -1217,9 +1230,15 @@ DissociationReaction<TNetwork, TDerived>::computeCoefficients()
 	auto clReg = this->_clusterData.getCluster(_reactant).getRegion();
 	auto prod1Reg = this->_clusterData.getCluster(_products[0]).getRegion();
 	auto prod2Reg = this->_clusterData.getCluster(_products[1]).getRegion();
-	const auto& clDisp = clReg.dispersion();
-	const auto& prod1Disp = prod1Reg.dispersion();
-	const auto& prod2Disp = prod2Reg.dispersion();
+	const auto& clDisp =
+		detail::getReflectedDispersionForCoefs<NetworkType::Traits::numSpecies>(
+			clReg);
+	const auto& prod1Disp =
+		detail::getReflectedDispersionForCoefs<NetworkType::Traits::numSpecies>(
+			prod1Reg);
+	const auto& prod2Disp =
+		detail::getReflectedDispersionForCoefs<NetworkType::Traits::numSpecies>(
+			prod2Reg);
 	auto cl2Reg = dummyRegion;
 
 	// Initialize the reflected regions
