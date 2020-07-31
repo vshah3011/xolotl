@@ -205,10 +205,10 @@ PSIReactionGenerator<TSpeciesEnum>::operator()(
 	// Special case for trap-mutation
 	if (nProd == 0) {
 		// Look for larger clusters only if one of the reactant is pure He
-		if (!(cl1Reg.isSimplex() && lo1.isOnAxis(Species::He)) &&
-			!(cl2Reg.isSimplex() && lo2.isOnAxis(Species::He))) {
-			return;
-		}
+//		if (!(cl1Reg.isSimplex() && lo1.isOnAxis(Species::He)) &&
+//			!(cl2Reg.isSimplex() && lo2.isOnAxis(Species::He))) {
+//			return;
+//		}
 
 		// Check that both reactants contain He
 		if (cl1Reg[Species::He].begin() < 1 ||

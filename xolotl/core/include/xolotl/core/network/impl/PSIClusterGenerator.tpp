@@ -456,8 +456,8 @@ PSIClusterGenerator<PSIFullSpeciesList>::getDiffusionFactor(
 
 	const auto& reg = cluster.getRegion();
 	double diffusionFactor = 0.0;
+	Composition comp(reg.getOrigin());
 	if (reg.isSimplex()) {
-		Composition comp(reg.getOrigin());
 		if (comp.isOnAxis(Species::I)) {
 			auto amtI = comp[Species::I];
 			if (amtI < iDiffusion.size()) {
@@ -496,6 +496,16 @@ PSIClusterGenerator<PSIFullSpeciesList>::getDiffusionFactor(
 			//			std::cout << comp[Species::V] << " " << comp[Species::He] <<
 			//" " << diffusionFactor << std::endl;
 		}
+	}
+	else if (_diffusivities.extent(0) > 0 && comp[Species::V] > 0 &&
+			comp[Species::He] > 0) {
+		// Loop on the He and V range
+		for (auto i : makeIntervalRange(reg[Species::He]))
+			for (auto j : makeIntervalRange(reg[Species::V])) {
+				diffusionFactor += _diffusivities(j, i);
+		}
+		// Average the diffusivity
+		diffusionFactor /= reg.volume();
 	}
 
 	return diffusionFactor;
