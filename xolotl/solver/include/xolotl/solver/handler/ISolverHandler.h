@@ -243,6 +243,30 @@ public:
 	getTauBursting() const = 0;
 
 	/**
+	 * Get the bursting factor for likelihood of bursting.
+	 *
+	 * @return The factor
+	 */
+	virtual double
+	getBurstingFactor() const = 0;
+
+	/**
+	 * Get the HeV ratio.
+	 *
+	 * @return The ratio
+	 */
+	virtual double
+	getHeVRatio() const = 0;
+
+	/**
+	 * Get the bursting minimum size parameter.
+	 *
+	 * @return The minimum size
+	 */
+	virtual int
+	getMinSizeBursting() const = 0;
+
+	/**
 	 * Get the grid left offset.
 	 *
 	 * @return The offset
@@ -383,7 +407,7 @@ public:
 	 *
 	 * @return The minimum size
 	 */
-	virtual util::Array<int, 4>
+	virtual std::vector<size_t>
 	getMinSizes() const = 0;
 
 	/**

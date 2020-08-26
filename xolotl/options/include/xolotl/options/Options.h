@@ -77,12 +77,12 @@ protected:
 	/**
 	 * Use a time profile for the flux?
 	 */
-	bool fluxProfileFlag;
+	bool fluxTimeProfileFlag;
 
 	/**
 	 * Name of the input time profile file for the flux.
 	 */
-	std::string fluxProfileFilename;
+	std::string fluxTimeProfileFilePath;
 
 	/**
 	 * Which type of performance infrastructure should we use?
@@ -247,6 +247,16 @@ protected:
 	double burstingDepth;
 
 	/**
+	 * Minimum size for the bursting.
+	 */
+	int burstingMinSize;
+
+	/**
+	 * Factor used in bursting probability.
+	 */
+	double burstingFactor;
+
+	/**
 	 * An explicitly-given value to use to seed the random number generator.
 	 * Only used if rngUseSeed is true.
 	 */
@@ -270,7 +280,7 @@ protected:
 	/**
 	 * Average radius computation minimum size
 	 */
-	util::Array<int, 4> radiusMinSizes;
+	std::vector<size_t> radiusMinSizes;
 
 	/**
 	 * Density of atom in a bubble in nm-3.
@@ -319,9 +329,19 @@ protected:
 	double fissionYield;
 
 	/**
+	 * HeV ration, how many He per V are allowed
+	 */
+	double heVRatio;
+
+	/**
 	 * Migration energy above which the diffusion will be ignored
 	 */
 	double migrationThreshold;
+
+	/**
+	 * The path to the custom flux profile file
+	 */
+	fs::path fluxDepthProfileFilePath;
 
 public:
 	/**
@@ -495,7 +515,7 @@ public:
 	bool
 	useFluxTimeProfile() const override
 	{
-		return fluxProfileFlag;
+		return fluxTimeProfileFlag;
 	}
 
 	/**
@@ -504,9 +524,9 @@ public:
 	 * \see IOptions.h
 	 */
 	std::string
-	getFluxProfileName() const override
+	getFluxTimeProfileFilePath() const override
 	{
-		return fluxProfileFilename;
+		return fluxTimeProfileFilePath;
 	}
 
 	/**
@@ -857,6 +877,16 @@ public:
 	}
 
 	/**
+	 * Obtain the value of the factor in the bursting probability.
+	 * \see IOptions.h
+	 */
+	double
+	getBurstingFactor() const override
+	{
+		return burstingFactor;
+	}
+
+	/**
 	 * Set the seed that should be used for initializing the random
 	 * number generator.
 	 * \see IOptions.h
@@ -905,7 +935,7 @@ public:
 	 * Obtain the minimum size for the average radius computation.
 	 * \see IOptions.h
 	 */
-	virtual util::Array<int, 4>
+	virtual std::vector<size_t>
 	getRadiusMinSizes() const override
 	{
 		return radiusMinSizes;
@@ -929,6 +959,16 @@ public:
 	getPulseTime() const override
 	{
 		return pulseTime;
+	}
+
+	/**
+	 * Obtain the value of the minimum size at which the bursting is happening.
+	 * \see IOptions.h
+	 */
+	int
+	getBurstingSize() const override
+	{
+		return burstingMinSize;
 	}
 
 	/**
@@ -1002,6 +1042,16 @@ public:
 	}
 
 	/**
+	 * Obtain the value of the HeV ratio.
+	 * \see IOptions.h
+	 */
+	virtual double
+	getHeVRatio() const override
+	{
+		return heVRatio;
+	}
+
+	/**
 	 * Obtain the value of the migration threshold
 	 * \see IOptions.h
 	 */
@@ -1009,6 +1059,16 @@ public:
 	getMigrationThreshold() const override
 	{
 		return migrationThreshold;
+	}
+
+	/**
+	 * Get the path to the custom flux profile.
+	 * \see IOptions.h
+	 */
+	virtual std::string
+	getFluxDepthProfileFilePath() const override
+	{
+		return fluxDepthProfileFilePath.string();
 	}
 };
 // end class Options

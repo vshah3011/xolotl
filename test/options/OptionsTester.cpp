@@ -107,39 +107,46 @@ BOOST_AUTO_TEST_CASE(goodParamFile)
 
 	// Create a good parameter file
 	std::ofstream goodParamFile("param_good.txt");
-	goodParamFile << "vizHandler=std" << std::endl
-				  << "petscArgs=-fieldsplit_0_pc_type redundant "
-					 "-ts_max_snes_failures 200 "
-					 "-pc_fieldsplit_detect_coupling "
-					 "-ts_adapt_dt_max 10 -pc_type fieldsplit "
-					 "-fieldsplit_1_pc_type sor -ts_final_time 1000 "
-					 "-ts_max_steps 3"
-				  << std::endl
-				  << "networkFile=tungsten.txt" << std::endl
-				  << "startTemp=900" << std::endl
-				  << "perfHandler=std" << std::endl
-				  << "flux=1.5" << std::endl
-				  << "material=W100" << std::endl
-				  << "initialV=0.05" << std::endl
-				  << "dimensions=1" << std::endl
-				  << "voidPortion=60.0" << std::endl
-				  << "regularGrid=no" << std::endl
-				  << "process=diff" << std::endl
-				  << "grouping=11 2 4" << std::endl
-				  << "sputtering=0.5" << std::endl
-				  << "boundary=1 1" << std::endl
-				  << "burstingDepth=5.0" << std::endl
-				  << "zeta=0.6" << std::endl
-				  << "resoSize=10" << std::endl
-				  << "radiusSize=5" << std::endl
-				  << "density=9.0" << std::endl
-				  << "lattice=0.1" << std::endl
-				  << "impurityRadius=0.5" << std::endl
-				  << "biasFactor=2.0" << std::endl
-				  << "hydrogenFactor=0.5" << std::endl
-				  << "xenonDiffusivity=3.0" << std::endl
-				  << "fissionYield=0.3" << std::endl
-				  << "migrationThreshold=1.0" << std::endl;
+	goodParamFile
+		<< "vizHandler=std" << std::endl
+		<< "petscArgs=-fieldsplit_0_pc_type redundant "
+		   "-ts_max_snes_failures 200 "
+		   "-pc_fieldsplit_detect_coupling "
+		   "-ts_adapt_dt_max 10 -pc_type fieldsplit "
+		   "-fieldsplit_1_pc_type sor -ts_final_time 1000 "
+		   "-ts_max_steps 3"
+		<< std::endl
+		<< "networkFile=tungsten.txt" << std::endl
+		<< "startTemp=900" << std::endl
+		<< "perfHandler=std" << std::endl
+		<< "flux=1.5" << std::endl
+		<< "material=W100" << std::endl
+		<< "initialV=0.05" << std::endl
+		<< "dimensions=1" << std::endl
+		<< "voidPortion=60.0" << std::endl
+		<< "regularGrid=no" << std::endl
+		<< "process=diff" << std::endl
+		<< "grouping=11 2 4" << std::endl
+		<< "sputtering=0.5" << std::endl
+		<< "boundary=1 1" << std::endl
+		<< std::endl
+		<< "burstingDepth=5.0" << std::endl
+		<< "burstingMin=3" << std::endl
+		<< "burstingFactor=2.5" << std::endl
+		<< "zeta=0.6" << std::endl
+		<< "resoSize=10" << std::endl
+		<< "radiusSize=5 0 3" << std::endl
+		<< "density=9.0" << std::endl
+		<< "lattice=0.1" << std::endl
+		<< "impurityRadius=0.5" << std::endl
+		<< "biasFactor=2.0" << std::endl
+		<< "hydrogenFactor=0.5" << std::endl
+		<< "xenonDiffusivity=3.0" << std::endl
+		<< "fissionYield=0.3" << std::endl
+		<< "heVRatio=5.0" << std::endl
+		<< "migrationThreshold=1.0" << std::endl
+		<< "fluxDepthProfileFilePath=path/to/the/flux/profile/file.txt"
+		<< std::endl;
 	goodParamFile.close();
 
 	string pathToFile("param_good.txt");
@@ -205,6 +212,12 @@ BOOST_AUTO_TEST_CASE(goodParamFile)
 	// Check the bursting depth option
 	BOOST_REQUIRE_EQUAL(opts.getBurstingDepth(), 5.0);
 
+	// Check the bursting size option
+	BOOST_REQUIRE_EQUAL(opts.getBurstingSize(), 3);
+
+	// Check the bursting factor option
+	BOOST_REQUIRE_EQUAL(opts.getBurstingFactor(), 2.5);
+
 	// Check the boundary conditions
 	BOOST_REQUIRE_EQUAL(opts.getLeftBoundary(), 1);
 	BOOST_REQUIRE_EQUAL(opts.getRightBoundary(), 1);
@@ -223,8 +236,7 @@ BOOST_AUTO_TEST_CASE(goodParamFile)
 	auto sizes = opts.getRadiusMinSizes();
 	BOOST_REQUIRE_EQUAL(sizes[0], 5);
 	BOOST_REQUIRE_EQUAL(sizes[1], 0);
-	BOOST_REQUIRE_EQUAL(sizes[2], 0);
-	BOOST_REQUIRE_EQUAL(sizes[3], 0);
+	BOOST_REQUIRE_EQUAL(sizes[2], 3);
 
 	// Check the xenon density option
 	BOOST_REQUIRE_EQUAL(opts.getDensity(), 9.0);
@@ -247,8 +259,15 @@ BOOST_AUTO_TEST_CASE(goodParamFile)
 	// Check the fission yield option
 	BOOST_REQUIRE_EQUAL(opts.getFissionYield(), 0.3);
 
+	// Check the HeV ration option
+	BOOST_REQUIRE_EQUAL(opts.getHeVRatio(), 5.0);
+
 	// Check the migration threshold option
 	BOOST_REQUIRE_EQUAL(opts.getMigrationThreshold(), 1.0);
+
+	// Check the network filename
+	BOOST_REQUIRE_EQUAL(opts.getFluxDepthProfileFilePath(),
+		"path/to/the/flux/profile/file.txt");
 
 	// Check the physical processes option
 	auto map = opts.getProcesses();
@@ -460,7 +479,7 @@ BOOST_AUTO_TEST_CASE(goodParamFileWithProfiles)
 
 	// Check if the time profile option is used for the flux
 	BOOST_REQUIRE_EQUAL(opts.useFluxTimeProfile(), true);
-	BOOST_REQUIRE_EQUAL(opts.getFluxProfileName(), "fluxFile.dat");
+	BOOST_REQUIRE_EQUAL(opts.getFluxTimeProfileFilePath(), "fluxFile.dat");
 
 	// Remove the created files
 	std::string tempFile = "temperatureFile.dat";

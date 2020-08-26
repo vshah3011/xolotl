@@ -19,10 +19,9 @@ MaterialHandler::MaterialHandler(const options::Options& options,
 	const IMaterialSubHandlerGenerator& subHandlerGenerator) :
 	_diffusionHandler(createDiffusionHandler(options)),
 	_advectionHandlers({subHandlerGenerator.generateAdvectionHandler()}),
-	_fluxHandler(subHandlerGenerator.generateFluxHandler()),
+	_fluxHandler(subHandlerGenerator.generateFluxHandler(options)),
 	_trapMutationHandler(subHandlerGenerator.generateTrapMutationHandler())
 {
-	initializeFluxHandler(options);
 	initializeTrapMutationHandler(options);
 	initializeAdvectionHandlers(options);
 }
@@ -58,25 +57,6 @@ MaterialHandler::createDiffusionHandler(const options::Options& options)
 		// The asked dimension is not good (e.g. -1, 4)
 		throw InvalidGridDimension(
 			"\nxolotlFactory: Bad dimension for the material factory.");
-	}
-}
-
-void
-MaterialHandler::initializeFluxHandler(const options::Options& options)
-{
-	// Wrong if both the flux and time profile options are used
-	if (options.useFluxAmplitude() && options.useFluxTimeProfile()) {
-		// A constant flux value AND a time profile cannot both be given.
-		throw std::string("\nA constant flux value AND a time profile "
-						  "cannot both be given.");
-	}
-	else if (options.useFluxAmplitude()) {
-		// Set the constant value of the flux
-		_fluxHandler->setFluxAmplitude(options.getFluxAmplitude());
-	}
-	else if (options.useFluxTimeProfile()) {
-		// Initialize the time profile
-		_fluxHandler->initializeTimeProfile(options.getFluxProfileName());
 	}
 }
 

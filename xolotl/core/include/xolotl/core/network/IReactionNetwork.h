@@ -7,6 +7,7 @@
 
 #include <xolotl/core/network/Cluster.h>
 #include <xolotl/core/network/ClusterData.h>
+#include <xolotl/core/network/SpeciesId.h>
 #include <xolotl/core/network/detail/ReactionData.h>
 
 namespace xolotl
@@ -27,7 +28,7 @@ public:
 	using Connectivity = detail::ClusterConnectivity<>;
 	using SparseFillMap = std::unordered_map<int, std::vector<int>>;
 	using Bounds = std::vector<std::vector<AmountType>>;
-	using PhaseSpace = std::vector<const char*>;
+	using PhaseSpace = std::vector<std::string>;
 
 	static constexpr IndexType
 	invalidIndex() noexcept
@@ -54,6 +55,18 @@ public:
 	{
 		return 0;
 	}
+
+	virtual std::size_t
+	getSpeciesListSize() const noexcept = 0;
+
+	virtual SpeciesId
+	parseSpeciesId(const std::string& label) const = 0;
+
+	virtual const std::string&
+	getSpeciesLabel(SpeciesId id) const = 0;
+
+	virtual const std::string&
+	getSpeciesName(SpeciesId id) const = 0;
 
 	KOKKOS_INLINE_FUNCTION
 	IndexType
@@ -171,6 +184,9 @@ public:
 	virtual void
 	syncClusterDataOnHost() = 0;
 
+	virtual IndexType
+	findClusterId(const std::vector<AmountType>& composition) = 0;
+
 	virtual ClusterCommon<plsm::OnHost>
 	getClusterCommon(IndexType clusterId) const = 0;
 
@@ -210,6 +226,28 @@ public:
 	 */
 	virtual IndexType
 	getDiagonalFill(SparseFillMap& fillMap) = 0;
+
+	virtual double
+	getTotalConcentration(ConcentrationsView concentrations, SpeciesId species,
+		AmountType minSize = 0) = 0;
+
+	virtual double
+	getTotalRadiusConcentration(ConcentrationsView concentrations,
+		SpeciesId species, AmountType minSize = 0) = 0;
+
+	virtual double
+	getTotalAtomConcentration(ConcentrationsView concentrations,
+		SpeciesId species, AmountType minSize = 0) = 0;
+
+	virtual void
+	updateOutgoingDiffFluxes(double* gridPointSolution, double factor,
+		std::vector<IndexType> diffusingIds, std::vector<double>& fluxes,
+		IndexType gridIndex) = 0;
+
+	virtual void
+	updateOutgoingAdvecFluxes(double* gridPointSolution, double factor,
+		std::vector<IndexType> advectingIds, std::vector<double> sinkStrengths,
+		std::vector<double>& fluxes, IndexType gridIndex) = 0;
 
 protected:
 	double _latticeParameter{};

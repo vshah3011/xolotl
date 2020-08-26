@@ -11,6 +11,99 @@ namespace core
 namespace network
 {
 template <typename TSpeciesEnum>
+void
+PSIReactionNetwork<TSpeciesEnum>::updateBurstingConcs(
+	double* gridPointSolution, double factor, std::vector<double>& nBurst)
+{
+	// Loop on every cluster
+	for (unsigned int i = 0; i < this->getNumClusters(); i++) {
+		const auto& clReg = this->getCluster(i, plsm::onHost).getRegion();
+		// Non-grouped clusters
+		if (clReg.isSimplex()) {
+			// Get the composition
+			Composition comp = clReg.getOrigin();
+			// Pure He, D, or T case
+			if (comp.isOnAxis(Species::He)) {
+				// Compute the number of atoms released
+				nBurst[0] +=
+					gridPointSolution[i] * (double)comp[Species::He] * factor;
+				// Reset concentration
+				gridPointSolution[i] = 0.0;
+			}
+			else if (comp.isOnAxis(Species::D)) {
+				// Compute the number of atoms released
+				nBurst[1] +=
+					gridPointSolution[i] * (double)comp[Species::D] * factor;
+				// Reset concentration
+				gridPointSolution[i] = 0.0;
+			}
+			else if (comp.isOnAxis(Species::T)) {
+				// Compute the number of atoms released
+				nBurst[2] +=
+					gridPointSolution[i] * (double)comp[Species::T] * factor;
+				// Reset concentration
+				gridPointSolution[i] = 0.0;
+			}
+			// Mixed cluster case
+			else if (!comp.isOnAxis(Species::V) && !comp.isOnAxis(Species::I)) {
+				// Compute the number of atoms released
+				nBurst[0] +=
+					gridPointSolution[i] * (double)comp[Species::He] * factor;
+				nBurst[1] +=
+					gridPointSolution[i] * (double)comp[Species::D] * factor;
+				nBurst[2] +=
+					gridPointSolution[i] * (double)comp[Species::T] * factor;
+				// Transfer concentration to V of the same size
+				Composition vComp = Composition::zero();
+				vComp[Species::V] = comp[Species::V];
+				auto vCluster = this->findCluster(vComp, plsm::onHost);
+				gridPointSolution[vCluster.getId()] += gridPointSolution[i];
+				gridPointSolution[i] = 0.0;
+			}
+		}
+		// Grouped clusters
+		else {
+			// Compute the number of atoms released
+			double concFactor = clReg.volume() / clReg[Species::He].length();
+			for (auto j : makeIntervalRange(clReg[Species::He])) {
+				nBurst[0] +=
+					gridPointSolution[i] * (double)j * concFactor * factor;
+			}
+			concFactor = clReg.volume() / clReg[Species::D].length();
+			for (auto j : makeIntervalRange(clReg[Species::D])) {
+				nBurst[1] +=
+					gridPointSolution[i] * (double)j * concFactor * factor;
+			}
+			concFactor = clReg.volume() / clReg[Species::T].length();
+			for (auto j : makeIntervalRange(clReg[Species::T])) {
+				nBurst[2] +=
+					gridPointSolution[i] * (double)j * concFactor * factor;
+			}
+
+			// Get the factor
+			concFactor = clReg.volume() / clReg[Species::V].length();
+			// Loop on the Vs
+			for (auto j : makeIntervalRange(clReg[Species::V])) {
+				// Transfer concentration to V of the same size
+				Composition vComp = Composition::zero();
+				vComp[Species::V] = j;
+				auto vCluster = this->findCluster(vComp, plsm::onHost);
+				// TODO: refine formula with V moment
+				gridPointSolution[vCluster.getId()] +=
+					gridPointSolution[i] * concFactor;
+			}
+
+			// Reset the concentration and moments
+			gridPointSolution[i] = 0.0;
+			auto momentIds = this->getCluster(i, plsm::onHost).getMomentIds();
+			for (std::size_t j = 0; j < momentIds.extent(0); j++) {
+				gridPointSolution[momentIds(j)] = 0.0;
+			}
+		}
+	}
+}
+
+template <typename TSpeciesEnum>
 double
 PSIReactionNetwork<TSpeciesEnum>::checkLatticeParameter(double latticeParameter)
 {
@@ -34,20 +127,27 @@ template <typename TSpeciesEnum>
 typename PSIReactionNetwork<TSpeciesEnum>::IndexType
 PSIReactionNetwork<TSpeciesEnum>::checkLargestClusterId()
 {
-	AmountType largestSize = 0;
-	auto largestClusterId = PSIReactionNetwork<TSpeciesEnum>::invalidIndex();
-	for (IndexType i = 0; i < this->getNumClusters(); i++) {
-		const auto& clReg = this->getCluster(i).getRegion();
-		Composition hi = clReg.getUpperLimitPoint();
-		auto size =
-			hi[Species::He] + hi[Species::D] + hi[Species::T] + hi[Species::V];
-		if (size > largestSize) {
-			largestClusterId = i;
-			largestSize = size;
-		}
-	}
+	// Copy the cluster data for the parallel loop
+	auto clData = typename PSIReactionNetwork<TSpeciesEnum>::ClusterDataRef(
+		this->_clusterData);
+	using Reducer = Kokkos::MaxLoc<PSIReactionNetwork<TSpeciesEnum>::AmountType,
+		PSIReactionNetwork<TSpeciesEnum>::IndexType>;
+	typename Reducer::value_type maxLoc;
+	Kokkos::parallel_reduce(
+		this->_numClusters,
+		KOKKOS_LAMBDA(IndexType i, typename Reducer::value_type & update) {
+			const auto& clReg = clData.getCluster(i).getRegion();
+			Composition hi = clReg.getUpperLimitPoint();
+			auto size = hi[Species::He] + hi[Species::D] + hi[Species::T] +
+				hi[Species::V];
+			if (size > update.val) {
+				update.val = size;
+				update.loc = i;
+			}
+		},
+		Reducer(maxLoc));
 
-	return largestClusterId;
+	return maxLoc.loc;
 }
 
 namespace detail
@@ -205,10 +305,10 @@ PSIReactionGenerator<TSpeciesEnum>::operator()(
 	// Special case for trap-mutation
 	if (nProd == 0) {
 		// Look for larger clusters only if one of the reactant is pure He
-//		if (!(cl1Reg.isSimplex() && lo1.isOnAxis(Species::He)) &&
-//			!(cl2Reg.isSimplex() && lo2.isOnAxis(Species::He))) {
-//			return;
-//		}
+		//		if (!(cl1Reg.isSimplex() && lo1.isOnAxis(Species::He)) &&
+		//			!(cl2Reg.isSimplex() && lo2.isOnAxis(Species::He))) {
+		//			return;
+		//		}
 
 		// Check that both reactants contain He
 		if (cl1Reg[Species::He].begin() < 1 ||

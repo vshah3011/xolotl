@@ -19,7 +19,8 @@ PSIClusterGenerator<PSIFullSpeciesList>::PSIClusterGenerator(
 	_maxV(opts.getMaxV()),
 	_groupingMin(opts.getGroupingMin()),
 	_groupingWidthA(opts.getGroupingWidthA()),
-	_groupingWidthB(opts.getGroupingWidthB())
+	_groupingWidthB(opts.getGroupingWidthB()),
+	_hevRatio(opts.getHeVRatio())
 {
 	readDiffusivities();
 }
@@ -34,7 +35,8 @@ PSIClusterGenerator<PSIFullSpeciesList>::PSIClusterGenerator(
 	_maxV(opts.getMaxV()),
 	_groupingMin(opts.getGroupingMin()),
 	_groupingWidthA(opts.getGroupingWidthA()),
-	_groupingWidthB(opts.getGroupingWidthB())
+	_groupingWidthB(opts.getGroupingWidthB()),
+	_hevRatio(opts.getHeVRatio())
 {
 }
 
@@ -50,11 +52,11 @@ PSIClusterGenerator<PSIFullSpeciesList>::readDiffusivities(
 		return;
 	}
 	_diffusivities = Kokkos::View<double**>(
-		"diffusivities", _maxV + 1, getMaxHePerV(_maxV) + 1);
+		"diffusivities", _maxV + 1, getMaxHePerV(_maxV, _hevRatio) + 1);
 	auto diffusivities = Kokkos::create_mirror_view(_diffusivities);
 	// Initialize to 0.0
 	for (IndexType i = 0; i <= _maxV; i++)
-		for (IndexType j = 0; j <= getMaxHePerV(_maxV); j++) {
+		for (IndexType j = 0; j <= getMaxHePerV(_maxV, _hevRatio); j++) {
 			diffusivities(i, j) = 0.0;
 		}
 	// Build an input stream from the string
@@ -68,7 +70,7 @@ PSIClusterGenerator<PSIFullSpeciesList>::readDiffusivities(
 	auto tokens = reader.loadLine();
 	// And start looping on the lines
 	while (tokens.size() > 0) {
-		if (tokens[0] <= _maxV && tokens[1] <= getMaxHePerV(_maxV)) {
+		if (tokens[0] <= _maxV && tokens[1] <= getMaxHePerV(_maxV, _hevRatio)) {
 			diffusivities(static_cast<IndexType>(tokens[0]),
 				static_cast<IndexType>(tokens[1])) =
 				tokens[2] * 1.0e18; // to nm2 conversion
@@ -138,18 +140,19 @@ PSIClusterGenerator<PSIFullSpeciesList>::refine(
 	// Else refine around the edge
 	auto maxDPerV = KOKKOS_LAMBDA(AmountType amtV)
 	{
-		return (2.0 / 3.0) * getMaxHePerV(amtV) * (_maxD > 0);
+		return (2.0 / 3.0) * getMaxHePerV(amtV, _hevRatio) * (_maxD > 0);
 	};
 	auto maxTPerV = KOKKOS_LAMBDA(AmountType amtV)
 	{
-		return (2.0 / 3.0) * getMaxHePerV(amtV) * (_maxT > 0);
+		return (2.0 / 3.0) * getMaxHePerV(amtV, _hevRatio) * (_maxT > 0);
 	};
 	if (region[Species::V].end() > 1) {
 		Composition lo = region.getOrigin();
 		Composition hi = region.getUpperLimitPoint();
 
-		if (lo[Species::He] <= getMaxHePerV(hi[Species::V] - 1) &&
-			hi[Species::He] - 1 >= getMaxHePerV(lo[Species::V] - 1)) {
+		if (lo[Species::He] <= getMaxHePerV(hi[Species::V] - 1, _hevRatio) &&
+			hi[Species::He] - 1 >=
+				getMaxHePerV(lo[Species::V] - 1, _hevRatio)) {
 			return true;
 		}
 		if (lo[Species::D] <= maxDPerV(hi[Species::V] - 1) &&
@@ -259,14 +262,14 @@ PSIClusterGenerator<PSIFullSpeciesList>::select(const Region& region) const
 	// The edge
 	auto maxDPerV = KOKKOS_LAMBDA(AmountType amtV)
 	{
-		return (2.0 / 3.0) * getMaxHePerV(amtV);
+		return (2.0 / 3.0) * getMaxHePerV(amtV, _hevRatio);
 	};
 	if (region[Species::V].end() > 1) {
 		Composition lo = region.getOrigin();
 		Composition hi = region.getUpperLimitPoint();
 
 		// Too many helium
-		if (lo[Species::He] > getMaxHePerV(hi[Species::V] - 1)) {
+		if (lo[Species::He] > getMaxHePerV(hi[Species::V] - 1, _hevRatio)) {
 			return false;
 		}
 
@@ -299,13 +302,13 @@ PSIClusterGenerator<PSIFullSpeciesList>::select(const Region& region) const
 
 KOKKOS_FUNCTION
 typename PSIClusterGenerator<PSIFullSpeciesList>::AmountType
-PSIClusterGenerator<PSIFullSpeciesList>::getMaxHePerV(AmountType amtV) noexcept
+PSIClusterGenerator<PSIFullSpeciesList>::getMaxHePerV(
+	AmountType amtV, double ratio) noexcept
 {
 	/**
 	 * The maximum number of helium atoms that can be combined with a
-	 * vacancy cluster with size equal to the index i in the array plus one.
-	 * For example, an HeV size cluster with size 1 would have
-	 * size = i+1 = 1 and i = 0. It could support a mixture of up to nine
+	 * vacancy cluster with size equal to the index i.
+	 * It could support a mixture of up to nine
 	 * helium atoms with one vacancy.
 	 */
 	constexpr Kokkos::Array<AmountType, 30> maxHePerV = {0, 9, 14, 18, 20, 27,
@@ -315,7 +318,9 @@ PSIClusterGenerator<PSIFullSpeciesList>::getMaxHePerV(AmountType amtV) noexcept
 	if (amtV < maxHePerV.size()) {
 		return maxHePerV[amtV];
 	}
-	return 4 * amtV;
+	return std::max((AmountType)(ratio * amtV),
+		maxHePerV[maxHePerV.size() - 1] + amtV - (AmountType)maxHePerV.size() +
+			1);
 }
 
 template <typename PlsmContext>
@@ -493,17 +498,17 @@ PSIClusterGenerator<PSIFullSpeciesList>::getDiffusionFactor(
 			comp[Species::He] > 0) {
 			diffusionFactor =
 				_diffusivities(comp[Species::V], comp[Species::He]);
-			//			std::cout << comp[Species::V] << " " << comp[Species::He] <<
-			//" " << diffusionFactor << std::endl;
+			//			std::cout << comp[Species::V] << " " << comp[Species::He]
+			//<< " " << diffusionFactor << std::endl;
 		}
 	}
 	else if (_diffusivities.extent(0) > 0 && comp[Species::V] > 0 &&
-			comp[Species::He] > 0) {
+		comp[Species::He] > 0) {
 		// Loop on the He and V range
 		for (auto i : makeIntervalRange(reg[Species::He]))
 			for (auto j : makeIntervalRange(reg[Species::V])) {
 				diffusionFactor += _diffusivities(j, i);
-		}
+			}
 		// Average the diffusivity
 		diffusionFactor /= reg.volume();
 	}

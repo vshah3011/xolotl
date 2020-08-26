@@ -26,7 +26,7 @@ Options::Options() :
 	bulkTemperature(0.0),
 	fluxFlag(false),
 	fluxAmplitude(0.0),
-	fluxProfileFlag(false),
+	fluxTimeProfileFlag(false),
 	perfRegistryType(perf::IHandlerRegistry::std),
 	vizStandardHandlersFlag(false),
 	materialName(""),
@@ -62,6 +62,8 @@ Options::Options() :
 	frontBoundary(1),
 	backBoundary(1),
 	burstingDepth(10.0),
+	burstingMinSize(0),
+	burstingFactor(0.1),
 	rngUseSeed(false),
 	rngSeed(0),
 	rngPrintSeed(false),
@@ -76,10 +78,9 @@ Options::Options() :
 	hydrogenFactor(0.25),
 	xenonDiffusivity(-1.0),
 	fissionYield(0.25),
+	heVRatio(4.0),
 	migrationThreshold(std::numeric_limits<double>::infinity())
 {
-	radiusMinSizes.Init(0);
-
 	return;
 }
 
@@ -152,7 +153,7 @@ Options::readParams(int argc, char* argv[])
 		"The value of the incoming flux in #/nm2/s. If the Fuel case is used "
 		"it actually "
 		"corresponds to the fission rate in #/nm3/s.")("fluxFile",
-		bpo::value<std::string>(&fluxProfileFilename),
+		bpo::value<std::string>(&fluxTimeProfileFilePath),
 		"A time profile for the flux is given by the specified file, "
 		"then linear interpolation is used to fit the data."
 		"(NOTE: If a flux profile file is given, "
@@ -201,9 +202,9 @@ Options::readParams(int argc, char* argv[])
 		"To do so, simply write the values in order "
 		"nX xStepSize nY yStepSize nZ zStepSize .")("radiusSize",
 		bpo::value<std::string>(),
-		"This option allows the user a minimum size for the computation "
-		"for the average radius (default is 0).")("boundary",
-		bpo::value<std::string>(),
+		"This option allows the user to set a minimum size for the computation "
+		"for the average radii, in the same order as the netParam option "
+		"(default is 0).")("boundary", bpo::value<std::string>(),
 		"This option allows the user to choose the boundary conditions. "
 		"The first one correspond to the left side (surface) "
 		"and second one to the right (bulk), "
@@ -211,7 +212,12 @@ Options::readParams(int argc, char* argv[])
 		"0 means mirror or periodic, 1 means free surface.")("burstingDepth",
 		bpo::value<double>(&burstingDepth),
 		"This option allows the user to set a depth in nm "
-		"for the bubble bursting.")("rng", bpo::value<std::string>(),
+		"for the bubble bursting.")("burstingMin",
+		bpo::value<int>(&burstingMinSize),
+		"This option allows the user to set a minimum size for the bubble "
+		"bursting.")("burstingFactor", bpo::value<double>(&burstingFactor),
+		"This option allows the user to set the factor used in computing the "
+		"likelihood of a bursting event.")("rng", bpo::value<std::string>(),
 		"Allows user to specify seed used to initialize random number "
 		"generator (default = determined from current time) and "
 		"whether each process should print the seed value "
@@ -237,10 +243,16 @@ Options::readParams(int argc, char* argv[])
 		"This option allows the user to set the diffusion coefficient for "
 		"xenon in nm2 s-1.")("fissionYield", bpo::value<double>(&fissionYield),
 		"This option allows the user to set the number of xenon created for "
-		"each fission.")("migrationThreshold",
+		"each fission.")("heVRatio", bpo::value<double>(&heVRatio),
+		"This option allows the user to set the number of He atoms allowed per "
+		"V in a bubble.")("migrationThreshold",
 		bpo::value<double>(&migrationThreshold),
 		"This option allows the user to set a limit on the migration energy "
-		"above which the diffusion will be ignored.");
+		"above which the diffusion will be ignored.")(
+		"fluxDepthProfileFilePath",
+		bpo::value<fs::path>(&fluxDepthProfileFilePath),
+		"The path to the custom flux profile file; the default is an empty "
+		"string that will use the default material associated flux handler.");
 
 	bpo::options_description visible("Allowed options");
 	visible.add(desc).add(config);
@@ -324,7 +336,7 @@ Options::readParams(int argc, char* argv[])
 		}
 		if (opts.count("fluxFile")) {
 			// Check that the profile file exists
-			std::ifstream inFile(fluxProfileFilename.c_str());
+			std::ifstream inFile(fluxTimeProfileFilePath.c_str());
 			if (!inFile) {
 				std::cerr << "\nOptions: could not open file containing flux "
 							 "profile data. "
@@ -335,7 +347,7 @@ Options::readParams(int argc, char* argv[])
 			}
 			else {
 				// Set the flag to use a flux profile to true
-				fluxProfileFlag = true;
+				fluxTimeProfileFlag = true;
 			}
 		}
 
@@ -408,15 +420,10 @@ Options::readParams(int argc, char* argv[])
 			// Break the argument into tokens.
 			auto tokens = reader.loadLine();
 
-			// Create the array of sizes
-			util::Array<int, 4> sizes;
-			sizes.Init(0);
-
 			// Set the values
-			for (int i = 0; i < std::min((int)tokens.size(), 4); i++) {
-				sizes[i] = tokens[i];
+			for (int i = 0; i < tokens.size(); i++) {
+				radiusMinSizes.push_back(tokens[i]);
 			}
-			radiusMinSizes = sizes;
 		}
 
 		// Take care of the processes

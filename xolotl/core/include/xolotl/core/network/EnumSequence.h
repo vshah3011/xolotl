@@ -1,5 +1,7 @@
 #pragma once
 
+#include <type_traits>
+
 namespace xolotl
 {
 namespace core
@@ -73,8 +75,9 @@ struct EnumSequence
 	EnumSequence
 	operator++(int)
 	{
+		EnumSequence ret = *this;
 		++static_cast<Rep&>(value);
-		return *this;
+		return ret;
 	}
 
 	Enum value;
@@ -208,7 +211,8 @@ public:
 
 	KOKKOS_INLINE_FUNCTION
 	explicit constexpr EnumSequenceRange(Sequence first, Sequence last) :
-		_first{first}, _last{last}
+		_first{first},
+		_last{last}
 	{
 	}
 

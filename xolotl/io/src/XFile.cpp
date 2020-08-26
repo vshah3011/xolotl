@@ -175,14 +175,19 @@ XFile::NetworkGroup::NetworkGroup(
 
 	// Get the phase space information
 	auto phaseSpace = network.getPhaseSpace();
+	// Convert it to char
+	std::vector<const char*> phaseSpaceChar;
+	for (auto name : phaseSpace) {
+		phaseSpaceChar.push_back(name.c_str());
+	}
 	// Write it as an attribute
 	hid_t datatype = H5Tcopy(H5T_C_S1);
 	H5Tset_size(datatype, H5T_VARIABLE);
-	std::array<hsize_t, 1> dim{phaseSpace.size()};
+	std::array<hsize_t, 1> dim{phaseSpaceChar.size()};
 	XFile::SimpleDataSpace<1> phaseDSpace(dim);
 	hid_t attrId = H5Acreate2(getId(), phaseSpaceAttrName.c_str(), datatype,
 		phaseDSpace.getId(), H5P_DEFAULT, H5P_DEFAULT);
-	auto status = H5Awrite(attrId, datatype, phaseSpace.data());
+	auto status = H5Awrite(attrId, datatype, phaseSpaceChar.data());
 	status = H5Aclose(attrId);
 
 	// Get the bounds for each cluster
@@ -407,18 +412,14 @@ const std::string XFile::TimestepGroup::prevTimeAttrName = "previousTime";
 const std::string XFile::TimestepGroup::deltaTimeAttrName = "deltaTime";
 const std::string XFile::TimestepGroup::surfacePosDataName = "iSurface";
 const std::string XFile::TimestepGroup::nIntersAttrName = "nInterstitial";
-const std::string XFile::TimestepGroup::prevIFluxAttrName = "previousIFlux";
-const std::string XFile::TimestepGroup::nHeAttrName = "nHelium";
-const std::string XFile::TimestepGroup::prevHeFluxAttrName = "previousHeFlux";
-const std::string XFile::TimestepGroup::nDAttrName = "nDeuterium";
-const std::string XFile::TimestepGroup::prevDFluxAttrName = "previousDFlux";
-const std::string XFile::TimestepGroup::nTAttrName = "nTritium";
-const std::string XFile::TimestepGroup::prevTFluxAttrName = "previousTFlux";
-const std::string XFile::TimestepGroup::nVAttrName = "nVacancy";
-const std::string XFile::TimestepGroup::prevVFluxAttrName = "previousVFlux";
-const std::string XFile::TimestepGroup::nIntersBulkAttrName = "nIBulk";
-const std::string XFile::TimestepGroup::prevIBulkFluxAttrName =
-	"previousIBulkFlux";
+const std::string XFile::TimestepGroup::prevIFluxAttrName = "previousFluxI";
+const std::string XFile::TimestepGroup::nHeBurstAttrName = "nHeliumBurst";
+const std::string XFile::TimestepGroup::nDBurstAttrName = "nDeuteriumBurst";
+const std::string XFile::TimestepGroup::nTBurstAttrName = "nTritiumBurst";
+const std::string XFile::TimestepGroup::nAttrName = "n";
+const std::string XFile::TimestepGroup::previousFluxAttrName = "previousFlux";
+const std::string XFile::TimestepGroup::surfAttrName = "Surf";
+const std::string XFile::TimestepGroup::bulkAttrName = "Bulk";
 
 const std::string XFile::TimestepGroup::concDatasetName = "concs";
 
@@ -461,8 +462,10 @@ XFile::TimestepGroup::TimestepGroup(
 }
 
 void
-XFile::TimestepGroup::writeSurface1D(
-	Surface1DType iSurface, Data1DType nInter, Data1DType previousFlux) const
+XFile::TimestepGroup::writeSurface1D(Surface1DType iSurface, Data1DType nInter,
+	Data1DType previousIFlux, std::vector<Data1DType> nAtoms,
+	std::vector<Data1DType> previousFluxes,
+	std::vector<std::string> atomNames) const
 {
 	// Make a scalar dataspace for 1D attributes.
 	XFile::ScalarDataSpace scalarDSpace;
@@ -472,12 +475,30 @@ XFile::TimestepGroup::writeSurface1D(
 	surfacePosAttr.setTo(iSurface);
 
 	// Create, write, and close the quantity of interstitial attribute
-	Attribute<double> nIntersAttr(*this, nIntersAttrName, scalarDSpace);
+	Attribute<Data1DType> nIntersAttr(*this, nIntersAttrName, scalarDSpace);
 	nIntersAttr.setTo(nInter);
 
 	// Create, write, and close the flux of interstitial attribute
-	Attribute<double> prevIFluxAttr(*this, prevIFluxAttrName, scalarDSpace);
-	prevIFluxAttr.setTo(previousFlux);
+	Attribute<Data1DType> prevIFluxAttr(*this, prevIFluxAttrName, scalarDSpace);
+	prevIFluxAttr.setTo(previousIFlux);
+
+	// Loop on the names
+	for (auto i = 0; i < atomNames.size(); i++) {
+		// Create the n attribute name
+		std::ostringstream nName;
+		nName << nAttrName << atomNames[i] << surfAttrName;
+		// Add quantity attribute
+		Attribute<Data1DType> nAttr(*this, nName.str(), scalarDSpace);
+		nAttr.setTo(nAtoms[i]);
+
+		// Create the previous flux attribute name
+		std::ostringstream prevFluxName;
+		prevFluxName << previousFluxAttrName << atomNames[i] << surfAttrName;
+		// Add quantity attribute
+		Attribute<Data1DType> prevFluxAttr(
+			*this, prevFluxName.str(), scalarDSpace);
+		prevFluxAttr.setTo(previousFluxes[i]);
+	}
 
 	return;
 }
@@ -602,55 +623,31 @@ XFile::TimestepGroup::writeSurface3D(const Surface3DType& iSurface,
 }
 
 void
-XFile::TimestepGroup::writeBottom1D(Data1DType nHe, Data1DType previousHeFlux,
-	Data1DType nD, Data1DType previousDFlux, Data1DType nT,
-	Data1DType previousTFlux, Data1DType nV, Data1DType previousVFlux,
-	Data1DType nI, Data1DType previousIFlux)
+XFile::TimestepGroup::writeBottom1D(std::vector<Data1DType> nAtoms,
+	std::vector<Data1DType> previousFluxes, std::vector<std::string> atomNames)
 {
 	// Build a data space for scalar attributes.
 	XFile::ScalarDataSpace scalarDSpace;
 
-	// Add quantity of helium attribute
-	Attribute<Data1DType> nHeAttr(*this, nHeAttrName, scalarDSpace);
-	nHeAttr.setTo(nHe);
+	// Loop on the names
+	for (auto i = 0; i < atomNames.size(); i++) {
+		// Create the n attribute name
+		std::ostringstream nName;
+		nName << nAttrName << atomNames[i] << bulkAttrName;
+		// Add quantity attribute
+		Attribute<Data1DType> nAttr(*this, nName.str(), scalarDSpace);
+		nAttr.setTo(nAtoms[i]);
 
-	// Add flux of helium attribute
-	Attribute<Data1DType> prevHeFluxAttr(
-		*this, prevHeFluxAttrName, scalarDSpace);
-	prevHeFluxAttr.setTo(previousHeFlux);
+		// Create the previous flux attribute name
+		std::ostringstream prevFluxName;
+		prevFluxName << previousFluxAttrName << atomNames[i] << bulkAttrName;
+		// Add quantity attribute
+		Attribute<Data1DType> prevFluxAttr(
+			*this, prevFluxName.str(), scalarDSpace);
+		prevFluxAttr.setTo(previousFluxes[i]);
+	}
 
-	// Add quantity of deuterium attribute
-	Attribute<Data1DType> nDAttr(*this, nDAttrName, scalarDSpace);
-	nDAttr.setTo(nD);
-
-	// Add flux of deuterium attribute
-	Attribute<Data1DType> prevDFluxAttr(*this, prevDFluxAttrName, scalarDSpace);
-	prevDFluxAttr.setTo(previousDFlux);
-
-	// Add quantity of tritium attribute
-	Attribute<Data1DType> nTAttr(*this, nTAttrName, scalarDSpace);
-	nTAttr.setTo(nT);
-
-	// Add flux of tritium attribute
-	Attribute<Data1DType> prevTFluxAttr(*this, prevTFluxAttrName, scalarDSpace);
-	prevTFluxAttr.setTo(previousTFlux);
-
-	// Add quantity of vacancy attribute
-	Attribute<Data1DType> nVAttr(*this, nVAttrName, scalarDSpace);
-	nVAttr.setTo(nV);
-
-	// Add flux of vacancy attribute
-	Attribute<Data1DType> prevVFluxAttr(*this, prevVFluxAttrName, scalarDSpace);
-	prevVFluxAttr.setTo(previousVFlux);
-
-	// Add quantity of int attribute
-	Attribute<Data1DType> nIAttr(*this, nIntersBulkAttrName, scalarDSpace);
-	nIAttr.setTo(nI);
-
-	// Add flux of int attribute
-	Attribute<Data1DType> prevIFluxAttr(
-		*this, prevIBulkFluxAttrName, scalarDSpace);
-	prevIFluxAttr.setTo(previousIFlux);
+	return;
 }
 
 void
@@ -725,6 +722,26 @@ XFile::TimestepGroup::writeBottom2D(const Data2DType& nHe,
 
 	// Close everything
 	status = H5Dclose(datasetId);
+}
+
+void
+XFile::TimestepGroup::writeBursting1D(
+	Data1DType nHe, Data1DType nD, Data1DType nT)
+{
+	// Build a data space for scalar attributes.
+	XFile::ScalarDataSpace scalarDSpace;
+
+	// Add quantity of helium attribute
+	Attribute<Data1DType> nHeAttr(*this, nHeBurstAttrName, scalarDSpace);
+	nHeAttr.setTo(nHe);
+
+	// Add quantity of deuterium attribute
+	Attribute<Data1DType> nDAttr(*this, nDBurstAttrName, scalarDSpace);
+	nDAttr.setTo(nD);
+
+	// Add quantity of tritium attribute
+	Attribute<Data1DType> nTAttr(*this, nTBurstAttrName, scalarDSpace);
+	nTAttr.setTo(nT);
 }
 
 void

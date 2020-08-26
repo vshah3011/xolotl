@@ -35,17 +35,27 @@ class ReactionGeneratorBase;
 } // namespace detail
 
 template <typename TImpl>
-class ReactionNetwork : public IReactionNetwork
+struct ReactionNetworkInterface
+{
+	using Type = IReactionNetwork;
+};
+
+template <typename TImpl>
+class ReactionNetwork : public ReactionNetworkInterface<TImpl>::Type
 {
 	friend class detail::ReactionNetworkWorker<TImpl>;
 	template <typename, typename>
 	friend class detail::ReactionGeneratorBase;
 
 public:
+	using Superclass = typename ReactionNetworkInterface<TImpl>::Type;
 	using Traits = ReactionNetworkTraits<TImpl>;
 	using Species = typename Traits::Species;
 
 private:
+	static_assert(std::is_base_of<IReactionNetwork, Superclass>::value,
+		"ReactionNetwork must inherit from IReactionNetwork");
+
 	using Types = detail::ReactionNetworkTypes<TImpl>;
 
 	static constexpr std::size_t numSpecies = Traits::numSpecies;
@@ -69,6 +79,8 @@ public:
 	using ClusterDataMirror = typename Types::ClusterDataMirror;
 	using ClusterDataRef = typename Types::ClusterDataRef;
 	using ReactionCollection = typename Types::ReactionCollection;
+	using Bounds = IReactionNetwork::Bounds;
+	using PhaseSpace = IReactionNetwork::PhaseSpace;
 
 	template <typename PlsmContext>
 	using Cluster = Cluster<TImpl, PlsmContext>;
@@ -134,6 +146,21 @@ public:
 		return GroupingRange::mapToMomentId(value);
 	}
 
+	std::size_t
+	getSpeciesListSize() const noexcept override
+	{
+		return getNumberOfSpecies();
+	}
+
+	const std::string&
+	getSpeciesLabel(SpeciesId id) const override;
+
+	const std::string&
+	getSpeciesName(SpeciesId id) const override;
+
+	SpeciesId
+	parseSpeciesId(const std::string& speciesLabel) const override;
+
 	void
 	setLatticeParameter(double latticeParameter) override;
 
@@ -183,6 +210,17 @@ public:
 	findCluster(const Composition& comp)
 	{
 		return findCluster(comp, plsm::onDevice);
+	}
+
+	IndexType
+	findClusterId(const std::vector<AmountType>& composition) override
+	{
+		assert(composition.size() == getNumberOfSpecies());
+		Composition comp;
+		for (std::size_t i = 0; i < composition.size(); ++i) {
+			comp[i] = composition[i];
+		}
+		return findCluster(comp, plsm::onHost).getId();
 	}
 
 	ClusterCommon<plsm::OnHost>
@@ -263,6 +301,14 @@ public:
 	getTotalConcentration(ConcentrationsView concentrations, Species type,
 		AmountType minSize = 0);
 
+	double
+	getTotalConcentration(ConcentrationsView concentrations, SpeciesId species,
+		AmountType minSize = 0) override
+	{
+		auto type = species.cast<Species>();
+		return getTotalConcentration(concentrations, type, minSize);
+	}
+
 	/**
 	 * Get the total concentration of a given type of clusters times their
 	 * radius.
@@ -277,6 +323,14 @@ public:
 	getTotalRadiusConcentration(ConcentrationsView concentrations, Species type,
 		AmountType minSize = 0);
 
+	double
+	getTotalRadiusConcentration(ConcentrationsView concentrations,
+		SpeciesId species, AmountType minSize = 0) override
+	{
+		auto type = species.cast<Species>();
+		return getTotalRadiusConcentration(concentrations, type, minSize);
+	}
+
 	/**
 	 * Get the total concentration of a given type of clusters times the number
 	 * of atoms.
@@ -289,6 +343,14 @@ public:
 	double
 	getTotalAtomConcentration(ConcentrationsView concentrations, Species type,
 		AmountType minSize = 0);
+
+	double
+	getTotalAtomConcentration(ConcentrationsView concentrations,
+		SpeciesId species, AmountType minSize = 0) override
+	{
+		auto type = species.cast<Species>();
+		return getTotalAtomConcentration(concentrations, type, minSize);
+	}
 
 	/**
 	 * Get the total concentration of a given type of clusters only if it is
@@ -316,6 +378,16 @@ public:
 	getTotalVolumeFraction(ConcentrationsView concentrations, Species type,
 		AmountType minSize = 0);
 
+	void
+	updateOutgoingDiffFluxes(double* gridPointSolution, double factor,
+		std::vector<IndexType> diffusingIds, std::vector<double>& fluxes,
+		IndexType gridIndex) override;
+
+	void
+	updateOutgoingAdvecFluxes(double* gridPointSolution, double factor,
+		std::vector<IndexType> advectingIds, std::vector<double> sinkStrengths,
+		std::vector<double>& fluxes, IndexType gridIndex) override;
+
 private:
 	KOKKOS_INLINE_FUNCTION
 	TImpl*
@@ -323,6 +395,9 @@ private:
 	{
 		return static_cast<TImpl*>(this);
 	}
+
+	static std::map<std::string, SpeciesId>
+	createSpeciesLabelMap() noexcept;
 
 	void
 	defineMomentIds();
@@ -353,6 +428,8 @@ private:
 
 protected:
 	ClusterData _clusterData;
+
+	std::map<std::string, SpeciesId> _speciesLabelMap;
 };
 
 namespace detail

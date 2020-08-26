@@ -14,13 +14,14 @@ namespace network
 template <typename TImpl>
 ReactionNetwork<TImpl>::ReactionNetwork(const Subpaving& subpaving,
 	IndexType gridSize, const options::IOptions& opts) :
-	IReactionNetwork(gridSize),
+	Superclass(gridSize),
 	_subpaving(subpaving),
 	_clusterData(_subpaving, gridSize),
-	_worker(*this)
+	_worker(*this),
+	_speciesLabelMap(createSpeciesLabelMap())
 {
 	// Set constants
-	setInterstitialBias(opts.getBiasFactor());
+	this->setInterstitialBias(opts.getBiasFactor());
 	setImpurityRadius(opts.getImpurityRadius());
 	setLatticeParameter(opts.getLatticeParameter());
 	setFissionRate(opts.getFluxAmplitude());
@@ -31,24 +32,7 @@ ReactionNetwork<TImpl>::ReactionNetwork(const Subpaving& subpaving,
 	setEnableNucleation(map["heterogeneous"]);
 
 	auto tiles = subpaving.getTiles(plsm::onDevice);
-	_numClusters = tiles.extent(0);
-
-	//	// PRINT ALL THE CLUSTERS
-	//	constexpr auto speciesRange = getSpeciesRange();
-	//	for (IndexType i = 0; i < _numClusters; ++i) {
-	//		const auto& clReg = tiles(i).getRegion();
-	//		Composition lo = clReg.getOrigin();
-	//		Composition hi = clReg.getUpperLimitPoint();
-	//
-	//		std::cout << i << ": " << std::endl;
-	//		for (auto j : speciesRange)
-	//			std::cout << lo[j] << " ";
-	//		std::cout << std::endl;
-	//		for (auto j : speciesRange)
-	//			std::cout << hi[j] - 1 << " ";
-	//		std::cout << std::endl;
-	//	}
-	std::cout << "num: " << _numClusters << std::endl;
+	this->_numClusters = tiles.extent(0);
 
 	generateClusterData(ClusterGenerator{opts});
 	defineMomentIds();
@@ -97,6 +81,31 @@ ReactionNetwork<TImpl>::ReactionNetwork(
 		}(),
 		gridSize, opts)
 {
+}
+
+template <typename TImpl>
+const std::string&
+ReactionNetwork<TImpl>::getSpeciesLabel(SpeciesId id) const
+{
+	return toLabelString(id.cast<Species>());
+}
+
+template <typename TImpl>
+const std::string&
+ReactionNetwork<TImpl>::getSpeciesName(SpeciesId id) const
+{
+	return toNameString(id.cast<Species>());
+}
+
+template <typename TImpl>
+SpeciesId
+ReactionNetwork<TImpl>::parseSpeciesId(const std::string& speciesLabel) const
+{
+	auto it = _speciesLabelMap.find(speciesLabel);
+	if (it == _speciesLabelMap.end()) {
+		throw InvalidSpeciesId("Unrecognized species type: " + speciesLabel);
+	}
+	return it->second;
 }
 
 template <typename TImpl>
@@ -168,10 +177,10 @@ template <typename TImpl>
 void
 ReactionNetwork<TImpl>::setGridSize(IndexType gridSize)
 {
-	_gridSize = gridSize;
-	_clusterData.setGridSize(_gridSize);
-	_clusterDataMirror.setGridSize(_gridSize);
-	_reactions.setGridSize(_gridSize);
+	this->_gridSize = gridSize;
+	_clusterData.setGridSize(gridSize);
+	_clusterDataMirror.setGridSize(gridSize);
+	_reactions.setGridSize(gridSize);
 	_reactions.updateAll(_clusterData);
 	Kokkos::fence();
 }
@@ -297,7 +306,7 @@ ReactionNetwork<TImpl>::getAllClusterBounds()
 	// Loop on all the clusters
 	constexpr auto speciesRange = getSpeciesRange();
 	auto tiles = _subpaving.getTiles(plsm::onHost);
-	for (IndexType i = 0; i < _numClusters; ++i) {
+	for (IndexType i = 0; i < this->_numClusters; ++i) {
 		const auto& clReg = tiles(i).getRegion();
 		Composition lo = clReg.getOrigin();
 		Composition hi = clReg.getUpperLimitPoint();
@@ -321,7 +330,7 @@ ReactionNetwork<TImpl>::getPhaseSpace()
 	// Loop on all the clusters
 	constexpr auto speciesRange = getSpeciesRange();
 	for (auto j : speciesRange) {
-		space.push_back(toString(j));
+		space.push_back(toLabelString(j));
 	}
 	return space;
 }
@@ -443,7 +452,7 @@ ReactionNetwork<TImpl>::getTotalTrappedAtomConcentration(
 	auto tiles = _subpaving.getTiles(plsm::onDevice);
 	double conc = 0.0;
 	Kokkos::parallel_reduce(
-		_numClusters,
+		this->_numClusters,
 		KOKKOS_LAMBDA(IndexType i, double& lsum) {
 			const Region& clReg = tiles(i).getRegion();
 			if (clReg[vIndex].begin() > 0) {
@@ -462,11 +471,105 @@ ReactionNetwork<TImpl>::getTotalTrappedAtomConcentration(
 }
 
 template <typename TImpl>
+void
+ReactionNetwork<TImpl>::updateOutgoingDiffFluxes(double* gridPointSolution,
+	double factor, std::vector<IndexType> diffusingIds,
+	std::vector<double>& fluxes, IndexType gridIndex)
+{
+	// Loop on the diffusing clusters
+	for (auto l : diffusingIds) {
+		// Get the cluster and composition
+		auto cluster = this->getClusterCommon(l);
+		auto reg = this->getCluster(l, plsm::onHost).getRegion();
+		Composition comp = reg.getOrigin();
+		// Get its concentration
+		double conc = gridPointSolution[l];
+		// Get its size and diffusion coefficient
+		int size = 0;
+		for (auto id = core::network::SpeciesId(numSpecies); id; ++id) {
+			auto type = id.cast<Species>();
+			size += comp[type];
+		}
+		double coef = cluster.getDiffusionCoefficient(gridIndex);
+		// Compute the flux
+		double newFlux = (double)size * factor * coef * conc;
+
+		// Check the cluster type
+		for (auto id = core::network::SpeciesId(numSpecies); id; ++id) {
+			auto type = id.cast<Species>();
+			if (comp.isOnAxis(type)) {
+				fluxes[id()] += newFlux;
+				break;
+			}
+		}
+	}
+
+	return;
+}
+
+template <typename TImpl>
+void
+ReactionNetwork<TImpl>::updateOutgoingAdvecFluxes(double* gridPointSolution,
+	double factor, std::vector<IndexType> advectingIds,
+	std::vector<double> sinkStrengths, std::vector<double>& fluxes,
+	IndexType gridIndex)
+{
+	int advClusterIdx = 0;
+	// Loop on the advecting clusters
+	for (auto l : advectingIds) {
+		// Get the cluster and composition
+		auto cluster = this->getClusterCommon(l);
+		auto reg = this->getCluster(l, plsm::onHost).getRegion();
+		Composition comp = reg.getOrigin();
+		// Get its concentration
+		double conc = gridPointSolution[l];
+		// Get its size and diffusion coefficient
+		int size = 0;
+		for (auto id = core::network::SpeciesId(numSpecies); id; ++id) {
+			auto type = id.cast<Species>();
+			size += comp[type];
+		}
+		double coef = cluster.getDiffusionCoefficient(gridIndex);
+		// Compute the flux if the temperature is valid
+		double newFlux = 0.0;
+		if (cluster.getTemperature(gridIndex) > 0.0)
+			newFlux = (double)size * factor * coef * conc *
+				sinkStrengths[advClusterIdx] /
+				cluster.getTemperature(gridIndex);
+
+		// Check the cluster type
+		for (auto id = core::network::SpeciesId(numSpecies); id; ++id) {
+			auto type = id.cast<Species>();
+			if (comp.isOnAxis(type)) {
+				fluxes[id()] += newFlux;
+				break;
+			}
+		}
+
+		advClusterIdx++;
+	}
+
+	return;
+}
+
+template <typename TImpl>
 double
 ReactionNetwork<TImpl>::getTotalVolumeFraction(
 	ConcentrationsView concentrations, Species type, AmountType minSize)
 {
 	return _worker.getTotalVolumeFraction(concentrations, type, minSize);
+}
+
+template <typename TImpl>
+std::map<std::string, SpeciesId>
+ReactionNetwork<TImpl>::createSpeciesLabelMap() noexcept
+{
+	std::map<std::string, SpeciesId> labelMap;
+	for (auto s : getSpeciesRange()) {
+		labelMap.emplace(
+			toLabelString(s.value), SpeciesId(s.value, getNumberOfSpecies()));
+	}
+	return labelMap;
 }
 
 template <typename TImpl>

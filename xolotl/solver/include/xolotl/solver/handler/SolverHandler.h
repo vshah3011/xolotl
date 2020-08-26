@@ -147,11 +147,20 @@ protected:
 	//! The depth parameter for the bubble bursting.
 	double tauBursting;
 
+	//! The minimum size for the bubble bursting.
+	int minSizeBursting;
+
+	//! The factor involved in computing bursting likelihood.
+	double burstingFactor;
+
+	//! The ratio of He per V in a bubble.
+	double heVRatio;
+
 	//! The value to use to seed the random number generator.
 	unsigned int rngSeed;
 
 	//! The minimum sizes for average radius computation.
-	util::Array<int, 4> minRadiusSizes;
+	std::vector<size_t> minRadiusSizes;
 
 	//! The previous time.
 	double previousTime;
@@ -463,7 +472,10 @@ protected:
 		diffusionHandler(nullptr),
 		mutationHandler(nullptr),
 		tauBursting(10.0),
+		minSizeBursting(0),
+		burstingFactor(0.1),
 		rngSeed(0),
+		heVRatio(4.0),
 		previousTime(0.0),
 		nXeGB(0.0)
 	{
@@ -552,8 +564,14 @@ public:
 		// Set the modified trap-mutation handler
 		mutationHandler = material->getTrapMutationHandler().get();
 
-		// Set the minimum size for the average radius compuation
-		minRadiusSizes = opts.getRadiusMinSizes();
+		// Set the minimum size for the average radius computation
+		auto numSpecies = network.getSpeciesListSize();
+		minRadiusSizes = std::vector<size_t>(numSpecies, 1);
+		auto minSizes = opts.getRadiusMinSizes();
+		for (auto i = 0; i < std::min(minSizes.size(), minRadiusSizes.size());
+			 i++) {
+			minRadiusSizes[i] = minSizes[i];
+		}
 
 		// Set the initial vacancy concentration
 		initialVConc = opts.getInitialVConcentration();
@@ -572,6 +590,15 @@ public:
 
 		// Set the sputtering yield
 		tauBursting = opts.getBurstingDepth();
+
+		// Set minimum size for bursting
+		minSizeBursting = opts.getBurstingSize();
+
+		// Set the bursting factor
+		burstingFactor = opts.getBurstingFactor();
+
+		// Set the HeV ratio
+		heVRatio = opts.getHeVRatio();
 
 		// Look at if the user wants to use a regular grid in the x direction
 		if (opts.useRegularXGrid())
@@ -707,6 +734,36 @@ public:
 	getTauBursting() const override
 	{
 		return tauBursting;
+	}
+
+	/**
+	 * Get the bursting minimum size parameter.
+	 * \see ISolverHandler.h
+	 */
+	int
+	getMinSizeBursting() const override
+	{
+		return minSizeBursting;
+	}
+
+	/**
+	 * Get the bursting factor.
+	 * \see ISolverHandler.h
+	 */
+	double
+	getBurstingFactor() const override
+	{
+		return burstingFactor;
+	}
+
+	/**
+	 * Get the HeV ratio.
+	 * \see ISolverHandler.h
+	 */
+	double
+	getHeVRatio() const override
+	{
+		return heVRatio;
 	}
 
 	/**
@@ -946,7 +1003,7 @@ public:
 	 * Get the minimum size for computing average radius.
 	 * \see ISolverHandler.h
 	 */
-	util::Array<int, 4>
+	std::vector<size_t>
 	getMinSizes() const override
 	{
 		return minRadiusSizes;

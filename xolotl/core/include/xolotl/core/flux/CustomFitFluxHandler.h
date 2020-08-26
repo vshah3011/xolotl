@@ -1,14 +1,11 @@
-#ifndef TRIDYNFITFLUXHANDLER_H
-#define TRIDYNFITFLUXHANDLER_H
-
-#include <string.h>
+#pragma once
 
 #include <cmath>
 #include <fstream>
 #include <iostream>
 
 #include <xolotl/core/flux/FluxHandler.h>
-#include <xolotl/core/network/PSIReactionNetwork.h>
+#include <xolotl/util/Filesystem.h>
 #include <xolotl/util/MPIUtils.h>
 #include <xolotl/util/TokenizedLineReader.h>
 
@@ -20,9 +17,9 @@ namespace flux
 {
 /**
  * This class realizes the IFluxHandler interface to calculate the incident
- * helium flux for a (100) oriented tungsten material using TRIDYN input data.
+ * helium flux for a (100) oriented tungsten material using custom input data.
  */
-class TRIDYNFitFluxHandler : public FluxHandler
+class CustomFitFluxHandler : public FluxHandler
 {
 private:
 	/**
@@ -44,6 +41,11 @@ private:
 	 * Value of the fit function integrated on the grid.
 	 */
 	std::vector<double> normFactors;
+
+	/**
+	 * File path for custom profile
+	 */
+	fs::path profileFilePath;
 
 	/**
 	 * Function that calculate the flux of He at a given position x (in nm).
@@ -77,14 +79,16 @@ public:
 	/**
 	 * The constructor
 	 */
-	TRIDYNFitFluxHandler()
+	CustomFitFluxHandler(const options::IOptions& options) :
+		FluxHandler(options),
+		profileFilePath(options.getFluxDepthProfileFilePath())
 	{
 	}
 
 	/**
 	 * The Destructor
 	 */
-	~TRIDYNFitFluxHandler()
+	~CustomFitFluxHandler()
 	{
 	}
 
@@ -109,8 +113,7 @@ public:
 		xGrid = grid;
 
 		// Read the parameter file
-		std::ifstream paramFile;
-		paramFile.open("tridyn.dat");
+		fs::ifstream paramFile(profileFilePath);
 
 		// Gets the process ID
 		int procId;
@@ -121,7 +124,7 @@ public:
 			// Print a message
 			if (procId == 0)
 				std::cout
-					<< "No parameter files for TRIDYN flux, the flux will be 0"
+					<< "No parameter files for custom flux, the flux will be 0"
 					<< std::endl;
 		}
 		else {
@@ -133,49 +136,31 @@ public:
 			auto lineSS = std::make_shared<std::istringstream>(line);
 			reader.setInputStream(lineSS);
 
-			using NetworkType =
-				network::PSIReactionNetwork<network::PSIFullSpeciesList>;
-			auto psiNetwork = dynamic_cast<NetworkType*>(&network);
+			using AmountType = network::IReactionNetwork::AmountType;
 
 			// Read the first line
 			auto tokens = reader.loadLine();
 			// And start looping on the lines
 			int index = 0;
 			while (tokens.size() > 0) {
-				NetworkType::Composition comp =
-					NetworkType::Composition::zero();
+				auto comp =
+					std::vector<AmountType>(network.getSpeciesListSize(), 0);
 
 				// Read the cluster type
-				NetworkType::Species clusterSpecies;
-				if (tokens[0] == "He")
-					clusterSpecies = NetworkType::Species::He;
-				else if (tokens[0] == "I")
-					clusterSpecies = NetworkType::Species::I;
-				else if (tokens[0] == "D")
-					clusterSpecies = NetworkType::Species::D;
-				else if (tokens[0] == "T")
-					clusterSpecies = NetworkType::Species::T;
-				else if (tokens[0] == "V")
-					clusterSpecies = NetworkType::Species::V;
-				else {
-					// Print a message
-					if (procId == 0)
-						std::cout
-							<< "Unrecognize type for cluster in TRIDYN flux: "
-							<< tokens[0] << "." << std::endl;
-				}
+				auto clusterSpecies = network.parseSpeciesId(tokens[0]);
 				// Get the cluster
-				comp[clusterSpecies] = std::stoi(tokens[1]);
-				auto cluster = psiNetwork->findCluster(comp, plsm::onHost);
+				comp[clusterSpecies()] = std::stoi(tokens[1]);
+				auto clusterId = network.findClusterId(comp);
 				// Check that it is present in the network
-				if (cluster.getId() == NetworkType::invalidIndex()) {
-					throw std::string("\nThe requested cluster is not present "
-									  "in the network: " +
+				if (clusterId == network::IReactionNetwork::invalidIndex()) {
+					throw std::runtime_error(
+						"\nThe requested cluster is not present "
+						"in the network: " +
 						tokens[0] + "_" + tokens[1] +
 						", cannot use the flux option!");
 				}
 				else
-					fluxIndices.push_back(cluster.getId());
+					fluxIndices.push_back(clusterId);
 
 				// Get the reduction factor
 				reductionFactors.push_back(std::stod(tokens[2]));
@@ -185,7 +170,7 @@ public:
 					// Print a message
 					if (procId == 0)
 						std::cout
-							<< "One of the reduction factors for the TRIDYN "
+							<< "One of the reduction factors for the custom "
 							   "flux is negative, "
 							   "check if this is really what you want to do."
 							<< std::endl;
@@ -362,10 +347,8 @@ public:
 		return;
 	}
 };
-// end class TRIDYNFitFluxHandler
+// end class CustomFitFluxHandler
 
 } // namespace flux
 } // namespace core
 } // namespace xolotl
-
-#endif
