@@ -51,15 +51,27 @@ public:
 	}
 
 	SpeciesId
+	getVacancySpeciesId() const override
+	{
+		return SpeciesId{Species::V, this->getNumberOfSpecies()};
+	}
+
+	SpeciesId
 	getInterstitialSpeciesId() const override
 	{
 		return SpeciesId{Species::I, this->getNumberOfSpecies()};
 	}
 
-	SpeciesId
-	getVacancySpeciesId() const override
+	bool
+	hasDeuterium() const noexcept override
 	{
-		return SpeciesId{Species::V, this->getNumberOfSpecies()};
+		return psi::hasDeuterium<Species>;
+	}
+
+	bool
+	hasTritium() const noexcept override
+	{
+		return psi::hasTritium<Species>;
 	}
 
 	double

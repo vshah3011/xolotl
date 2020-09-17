@@ -13,6 +13,9 @@ KOKKOS_INLINE_FUNCTION
 double
 PSIDissociationReaction<TSpeciesEnum>::computeBindingEnergy()
 {
+	using psi::hasDeuterium;
+	using psi::hasTritium;
+
 	using NetworkType = typename Superclass::NetworkType;
 
 	constexpr double beTableV1[10][7] = {
@@ -80,26 +83,32 @@ PSIDissociationReaction<TSpeciesEnum>::computeBindingEnergy()
 	if (clReg.isSimplex()) {
 		if (prod1Reg.isSimplex()) {
 			auto orig1 = prod1Reg.getOrigin();
-			if (orig1.isOnAxis(Species::D) || orig1.isOnAxis(Species::T)) {
-				useTable = true;
+			if constexpr (hasDeuterium<Species> && hasTritium<Species>) {
+				if (orig1.isOnAxis(Species::D) || orig1.isOnAxis(Species::T)) {
+					useTable = true;
+				}
 			}
 		}
 		else if (prod2Reg.isSimplex()) {
 			auto orig2 = prod2Reg.getOrigin();
-			if (orig2.isOnAxis(Species::D) || orig2.isOnAxis(Species::T)) {
-				useTable = true;
+			if constexpr (hasDeuterium<Species> && hasTritium<Species>) {
+				if (orig2.isOnAxis(Species::D) || orig2.isOnAxis(Species::T)) {
+					useTable = true;
+				}
 			}
 		}
 	}
 
-	if (useTable) {
-		Composition comp(clReg.getOrigin());
-		auto hAmount = comp[Species::D] + comp[Species::T];
-		if (comp[Species::V] == 1) {
-			be = beTableV1[comp[Species::He]][hAmount];
-		}
-		else if (comp[Species::V] == 2) {
-			be = beTableV2[comp[Species::He]][hAmount];
+	if constexpr (hasDeuterium<Species> && hasTritium<Species>) {
+		if (useTable) {
+			Composition comp(clReg.getOrigin());
+			auto hAmount = comp[Species::D] + comp[Species::T];
+			if (comp[Species::V] == 1) {
+				be = beTableV1[comp[Species::He]][hAmount];
+			}
+			else if (comp[Species::V] == 2) {
+				be = beTableV2[comp[Species::He]][hAmount];
+			}
 		}
 	}
 

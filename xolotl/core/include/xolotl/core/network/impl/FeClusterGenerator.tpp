@@ -113,7 +113,11 @@ FeClusterGenerator::refine(const Region& region, BoolArray& result) const
 		result[1] = true;
 	}
 
-	return (result[0] && result[1]);
+	if (!result[0] && !result[1]) {
+		return false;
+	}
+
+	return true;
 }
 
 KOKKOS_INLINE_FUNCTION
@@ -168,7 +172,7 @@ FeClusterGenerator::getMigrationEnergy(
 		0.0, 0.67, 0.62, 0.37, 0.48};
 
 	const auto& reg = cluster.getRegion();
-	double migrationEnergy = std::numeric_limits<double>::infinity();
+	double migrationEnergy = util::infinity<double>;
 	if (reg.isSimplex()) {
 		Composition comp(reg.getOrigin());
 		if (comp.isOnAxis(Species::I)) {
