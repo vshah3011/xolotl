@@ -19,8 +19,13 @@ void FluxHandler::initializeFluxHandler(const IReactionNetwork& network,
 	// Set the grid
 	xGrid = grid;
 
-	if (xGrid.size() == 0)
+	if (xGrid.size() == 0) {
+		// Add an empty vector
+		std::vector<double> tempVector;
+		incidentFluxVec.push_back(tempVector);
+
 		return;
+	}
 
 	// Compute the norm factor because the fit function has an
 	// arbitrary amplitude
@@ -29,7 +34,7 @@ void FluxHandler::initializeFluxHandler(const IReactionNetwork& network,
 	// and last because of the boundary conditions
 	for (int i = surfacePos + 1; i < xGrid.size() - 3; i++) {
 		// Get the x position
-		double x = xGrid[i + 1] - xGrid[surfacePos + 1];
+		double x = (xGrid[i] + xGrid[i + 1]) / 2.0 - xGrid[surfacePos + 1];
 
 		// Add the the value of the function times the step size
 		normFactor += FitFunction(x) * (xGrid[i + 1] - xGrid[i]);
@@ -44,21 +49,25 @@ void FluxHandler::initializeFluxHandler(const IReactionNetwork& network,
 	// Clear the flux vector
 	incidentFluxVec.clear();
 	// The first value corresponding to the surface position should always be 0.0
-	incidentFluxVec.push_back(0.0);
+	std::vector<double> tempVector;
+	tempVector.push_back(0.0);
 
 	// Starts a i = surfacePos + 1 because the first value was already put in the vector
 	for (int i = surfacePos + 1; i < xGrid.size() - 3; i++) {
 		// Get the x position
-		auto x = xGrid[i + 1] - xGrid[surfacePos + 1];
+		auto x = (xGrid[i] + xGrid[i + 1]) / 2.0 - xGrid[surfacePos + 1];
 
 		// Compute the flux value
 		double incidentFlux = fluxNormalized * FitFunction(x);
 		// Add it to the vector
-		incidentFluxVec.push_back(incidentFlux);
+		tempVector.push_back(incidentFlux);
 	}
 
 	// The last value should always be 0.0 because of boundary conditions
-	incidentFluxVec.push_back(0.0);
+	tempVector.push_back(0.0);
+
+	// Add it to the vector of fluxes
+	incidentFluxVec.push_back(tempVector);
 
 	return;
 }
@@ -69,15 +78,15 @@ void FluxHandler::recomputeFluxHandler(int surfacePos) {
 	if (normFactor > 0.0)
 		fluxNormalized = fluxAmplitude / normFactor;
 
-	// Starts a i = surfacePos + 1 because the first values were already put in the vector
+	// Starts at i = surfacePos + 1 because the first values were already put in the vector
 	for (int i = surfacePos + 1; i < xGrid.size() - 3; i++) {
 		// Get the x position
-		auto x = xGrid[i + 1] - xGrid[surfacePos + 1];
+		auto x = (xGrid[i] + xGrid[i + 1]) / 2.0 - xGrid[surfacePos + 1];
 
 		// Compute the flux value
 		double incidentFlux = fluxNormalized * FitFunction(x);
 		// Add it to the vector
-		incidentFluxVec[i - surfacePos] = incidentFlux;
+		incidentFluxVec[0][i - surfacePos] = incidentFlux;
 	}
 
 	return;
@@ -87,7 +96,7 @@ void FluxHandler::initializeTimeProfile(const std::string& fileName) {
 	// Set use time profile to true
 	useTimeProfile = true;
 
-	// Open file dataFile.dat containing the time and amplitude
+	// Open file containing the time and amplitude
 	std::ifstream inputFile(fileName.c_str());
 	std::string line;
 
@@ -137,19 +146,23 @@ double FluxHandler::getProfileAmplitude(double currentTime) const {
 
 void FluxHandler::computeIncidentFlux(double currentTime,
 		double *updatedConcOffset, int xi, int surfacePos) {
+	// Skip if no index was set
+	if (fluxIndices.size() == 0)
+		return;
+
 	// Recompute the flux vector if a time profile is used
 	if (useTimeProfile) {
 		fluxAmplitude = getProfileAmplitude(currentTime);
 		recomputeFluxHandler(surfacePos);
 	}
 
-	if (incidentFluxVec.size() == 0) {
+	if (incidentFluxVec[0].size() == 0) {
 		updatedConcOffset[fluxIndices[0]] += fluxAmplitude;
 		return;
 	}
 
 	// Update the concentration array
-	updatedConcOffset[fluxIndices[0]] += incidentFluxVec[xi - surfacePos];
+	updatedConcOffset[fluxIndices[0]] += incidentFluxVec[0][xi - surfacePos];
 
 	return;
 }
@@ -157,6 +170,13 @@ void FluxHandler::computeIncidentFlux(double currentTime,
 void FluxHandler::incrementFluence(double dt) {
 	// The fluence is the flux times the time
 	fluence += fluxAmplitude * dt;
+
+	return;
+}
+
+void FluxHandler::computeFluence(double time) {
+	// The fluence is the flux times the time
+	fluence = fluxAmplitude * time;
 
 	return;
 }
@@ -174,7 +194,7 @@ double FluxHandler::getFluxAmplitude() const {
 }
 
 double FluxHandler::getFluxRate() const {
-	if (incidentFluxVec.size() == 0)
+	if (incidentFluxVec[0].size() == 0)
 		return fluxAmplitude;
 	return fluxAmplitude / normFactor;
 }

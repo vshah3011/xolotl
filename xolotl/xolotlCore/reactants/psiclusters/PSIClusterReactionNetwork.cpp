@@ -16,8 +16,7 @@ PSIClusterReactionNetwork::PSIClusterReactionNetwork(
 		std::shared_ptr<xolotlPerf::IHandlerRegistry> registry) :
 		ReactionNetwork( { ReactantType::V, ReactantType::I, ReactantType::He,
 				ReactantType::D, ReactantType::T, ReactantType::HeI,
-				ReactantType::PSIMixed, ReactantType::PSISuper },
-				ReactantType::PSISuper, registry) {
+				ReactantType::PSIMixed, ReactantType::PSISuper }, registry) {
 
 	// Initialize default properties
 	dissociationsEnabled = true;
@@ -29,7 +28,7 @@ PSIClusterReactionNetwork::PSIClusterReactionNetwork(
 }
 
 double PSIClusterReactionNetwork::calculateDissociationConstant(
-		const DissociationReaction& reaction, int i) const {
+		const DissociationReaction& reaction, int i) {
 
 	// If the dissociations are not allowed
 	if (!dissociationsEnabled)
@@ -41,9 +40,7 @@ double PSIClusterReactionNetwork::calculateDissociationConstant(
 	// the corners are shared across a total of eight cells. The fraction of
 	// the volume of the lattice cell that is filled with tungsten atoms is the
 	// atomic volume and is a_0^3/(8*1/8 + 1) = 0.5*a_0^3.
-	double atomicVolume = 0.5 * xolotlCore::tungstenLatticeConstant
-			* xolotlCore::tungstenLatticeConstant
-			* xolotlCore::tungstenLatticeConstant;
+	double atomicVolume = 0.5 * pow(latticeParameter, 3);
 
 	// Get the rate constant from the reverse reaction
 	double kPlus = reaction.reverseReaction->kConstant[i];
@@ -51,11 +48,9 @@ double PSIClusterReactionNetwork::calculateDissociationConstant(
 	// Calculate and return
 	double bindingEnergy = computeBindingEnergy(reaction);
 	double k_minus_exp = exp(
-			-1.0 * bindingEnergy
-					/ (xolotlCore::kBoltzmann
-							* temperature)); // We can use the network temperature
-											// because this method is called only
-											// when the temperature is updated
+			-1.0 * bindingEnergy / (xolotlCore::kBoltzmann * temperature)); // We can use the network temperature
+																			// because this method is called only
+																			// when the temperature is updated
 	double k_minus = (1.0 / atomicVolume) * kPlus * k_minus_exp;
 
 	return k_minus;
@@ -1490,12 +1485,9 @@ std::vector<std::vector<int> > PSIClusterReactionNetwork::getCompositionList() c
 
 void PSIClusterReactionNetwork::getDiagonalFill(SparseFillMap& fillMap) {
 
-	// Degrees of freedom is the total number of clusters in the network
-	const int dof = getDOF();
-
 	// Get the connectivity for each reactant
 	std::for_each(allReactants.begin(), allReactants.end(),
-			[&fillMap,&dof,this](const IReactant& reactant) {
+			[&fillMap,this](const IReactant& reactant) {
 
 				// Get the reactant's connectivity
 				auto const& connectivity = reactant.getConnectivity();
@@ -1563,7 +1555,8 @@ void PSIClusterReactionNetwork::getDiagonalFill(SparseFillMap& fillMap) {
 	return;
 }
 
-double PSIClusterReactionNetwork::getTotalAtomConcentration(int i) {
+double PSIClusterReactionNetwork::getTotalAtomConcentration(int i,
+		int minSize) {
 	// Initial declarations
 	double atomConc = 0.0;
 	ReactantType type;
@@ -1592,7 +1585,8 @@ double PSIClusterReactionNetwork::getTotalAtomConcentration(int i) {
 		double size = cluster.getSize();
 
 		// Add the concentration times the He content to the total helium concentration
-		atomConc += cluster.getConcentration() * size;
+		if (size >= minSize)
+			atomConc += cluster.getConcentration() * size;
 	}
 
 	// Sum over all Mixed clusters.
@@ -1601,10 +1595,11 @@ double PSIClusterReactionNetwork::getTotalAtomConcentration(int i) {
 		// Get the cluster and its composition
 		auto const& cluster = *(currMapItem.second);
 		auto& comp = cluster.getComposition();
+		double size = comp[toCompIdx(toSpecies(type))];
 
 		// Add the concentration times the He content to the total helium concentration
-		atomConc += cluster.getConcentration()
-				* comp[toCompIdx(toSpecies(type))];
+		if (size >= minSize)
+			atomConc += cluster.getConcentration() * size;
 	}
 
 	// Sum over all super clusters.
@@ -1615,13 +1610,14 @@ double PSIClusterReactionNetwork::getTotalAtomConcentration(int i) {
 				static_cast<PSISuperCluster&>(*(currMapItem.second));
 
 		// Add its total atom concentration
-		atomConc += cluster.getTotalAtomConcentration(i);
+		atomConc += cluster.getTotalAtomConcentration(i, minSize);
 	}
 
 	return atomConc;
 }
 
-double PSIClusterReactionNetwork::getTotalTrappedAtomConcentration(int i) {
+double PSIClusterReactionNetwork::getTotalTrappedAtomConcentration(int i,
+		int minSize) {
 	// Initial declarations
 	double atomConc = 0.0;
 	ReactantType type;
@@ -1648,10 +1644,11 @@ double PSIClusterReactionNetwork::getTotalTrappedAtomConcentration(int i) {
 		// Get the cluster and its composition
 		auto const& cluster = *(currMapItem.second);
 		auto& comp = cluster.getComposition();
+		double size = comp[toCompIdx(toSpecies(type))];
 
 		// Add the concentration times the He content to the total helium concentration
-		atomConc += cluster.getConcentration()
-				* comp[toCompIdx(toSpecies(type))];
+		if (size >= minSize)
+			atomConc += cluster.getConcentration() * size;
 	}
 
 	// Sum over all super clusters.
@@ -1662,7 +1659,7 @@ double PSIClusterReactionNetwork::getTotalTrappedAtomConcentration(int i) {
 				static_cast<PSISuperCluster&>(*(currMapItem.second));
 
 		// Add its total helium concentration helium concentration
-		atomConc += cluster.getTotalAtomConcentration(i);
+		atomConc += cluster.getTotalAtomConcentration(i, minSize);
 	}
 
 	return atomConc;
@@ -1720,6 +1717,37 @@ double PSIClusterReactionNetwork::getTotalIConcentration() {
 	}
 
 	return iConc;
+}
+
+double PSIClusterReactionNetwork::getTotalBubbleConcentration(int minSize) {
+	// Initial declarations
+	double conc = 0.0;
+
+	// Sum over all Mixed clusters.
+	for (auto const& currMapItem : getAll(ReactantType::PSIMixed)) {
+
+		// Get the cluster and its composition
+		auto const& cluster = *(currMapItem.second);
+		auto& comp = cluster.getComposition();
+		double size = comp[toCompIdx(Species::He)];
+
+		// Add the concentration to the total bubble concentration
+		if (size >= minSize)
+			conc += cluster.getConcentration();
+	}
+
+	// Sum over all super clusters.
+	for (auto const& currMapItem : getAll(ReactantType::PSISuper)) {
+
+		// Get the cluster
+		auto const& cluster =
+				static_cast<PSISuperCluster&>(*(currMapItem.second));
+
+		// Add its total concentration to the concentration
+		conc += cluster.getTotalConcentration(minSize);
+	}
+
+	return conc;
 }
 
 void PSIClusterReactionNetwork::computeAllFluxes(double *updatedConcOffset,
@@ -1826,11 +1854,11 @@ void PSIClusterReactionNetwork::computeAllPartials(
 
 		// Get the inverse mappings from dense DOF space to
 		// the indices/vals arrays.
-        // We use a pointer to the maps to avoid copying them into
-        // our array.
-        // TODO can we use references here, without having to
-        // change PartialsIdxMap type from unordered_map?
-        std::array<const PartialsIdxMap*, 5> partialsIdxMap;
+		// We use a pointer to the maps to avoid copying them into
+		// our array.
+		// TODO can we use references here, without having to
+		// change PartialsIdxMap type from unordered_map?
+		std::array<const PartialsIdxMap*, 5> partialsIdxMap;
 		for (int i = 0; i < psDim; i++) {
 			partialsIdxMap[i] = &(dFillInvMap.at(reactantIndices[i]));
 			partials[i] = &(vals[startingIdx[reactantIndices[i]]]);

@@ -33,9 +33,7 @@ public:
 	 * of the advecting clusters
 	 */
 	void initialize(const IReactionNetwork& network,
-                    IReactionNetwork::SparseFillMap& ofillMap) override {
-
-		int dof = network.getDOF();
+			IReactionNetwork::SparseFillMap& ofillMap) override {
 
 		// Clear the index and sink strength vectors
 		advectingClusters.clear();
@@ -44,7 +42,7 @@ public:
 		// Loop on all the reactants
 		for (IReactant const& currReactant : network.getAll()) {
 
-			auto const& cluster = static_cast<PSICluster const&>(currReactant);
+			auto const& cluster = static_cast<IReactant const&>(currReactant);
 
 			// Get its diffusion coefficient
 			double diffFactor = cluster.getDiffusionFactor();
@@ -100,7 +98,7 @@ public:
 			// Get its id
 			int index = cluster.getId() - 1;
 			// Set the ofill value to 1 for this cluster
-            ofillMap[index].emplace_back(index);
+			ofillMap[index].emplace_back(index);
 		}
 
 		return;

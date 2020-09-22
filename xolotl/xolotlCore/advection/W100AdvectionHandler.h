@@ -37,8 +37,6 @@ public:
 	// have these classes differ in the sinkStrength identification.
 	void initialize(const IReactionNetwork& network,
 			IReactionNetwork::SparseFillMap& ofillMap) override {
-		// Get all the reactants and their number
-		int dof = network.getDOF();
 
 		// Clear the index and sink strength vectors
 		advectingClusters.clear();
@@ -47,7 +45,7 @@ public:
 		// Consider each reactant.
 		for (IReactant const& currReactant : network.getAll()) {
 
-			auto const& cluster = static_cast<PSICluster const&>(currReactant);
+			auto const& cluster = static_cast<IReactant const&>(currReactant);
 
 			// Get its diffusion coefficient
 			double diffFactor = cluster.getDiffusionFactor();

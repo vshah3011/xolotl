@@ -291,8 +291,9 @@ void PSISuperCluster::resultFrom(ProductionReaction& reaction,
 		}
 
 		// Special case for V and I
-		if (i == 4)
+		if (i == 4) {
 			singleComp[i - 1] -= iSize;
+		}
 
 		width[i - 1] = std::min(productHi[i - 1],
 				r1Hi[i - 1] + singleComp[i - 1])
@@ -947,12 +948,11 @@ void PSISuperCluster::setHeVVector(const HeVListType& vec) {
 
 	// Initialize the dispersion sum
 	double nSquare[4] = { };
+	double latticeParam = network.getLatticeParameter();
 	// Update the network map, compute the radius and dispersions
 	for (auto const& pair : heVList) {
-		constexpr auto tlcCubed = xolotlCore::tungstenLatticeConstant
-				* xolotlCore::tungstenLatticeConstant
-				* xolotlCore::tungstenLatticeConstant;
-		double rad = (sqrt(3.0) / 4.0) * xolotlCore::tungstenLatticeConstant
+		auto tlcCubed = latticeParam * latticeParam * latticeParam;
+		double rad = (sqrt(3.0) / 4.0) * latticeParam
 				+ cbrt(
 						(3.0 * tlcCubed * std::get<3>(pair))
 								/ (8.0 * xolotlCore::pi))
@@ -975,12 +975,21 @@ void PSISuperCluster::setHeVVector(const HeVListType& vec) {
 			dispersion[i] = 2.0
 					* (nSquare[i] - (numAtom[i] * (double) nTot * numAtom[i]))
 					/ ((double) (nTot * (sectionWidth[i] - 1)));
+		if (dispersion[i] == 0) {
+			std::cout << name << " " << i << " " << numAtom[i] << " " << nTot
+					<< " " << sectionWidth[i] << " " << nSquare[i] << std::endl;
+
+			for (auto const& pair : heVList) {
+				std::cout << std::get<0>(pair) << std::endl;
+			}
+		}
+
 	}
 
 	return;
 }
 
-double PSISuperCluster::getTotalConcentration() const {
+double PSISuperCluster::getTotalConcentration(int minSize) const {
 	// Initial declarations
 	double heDistance = 0.0, dDistance = 0.0, tDistance = 0.0, vDistance = 0.0,
 			conc = 0.0;
@@ -993,15 +1002,17 @@ double PSISuperCluster::getTotalConcentration() const {
 		tDistance = getDistance(std::get<2>(pair), 2);
 		vDistance = getDistance(std::get<3>(pair), 3);
 
-		// Add the concentration of each cluster in the group times its number of helium
-		conc += getConcentration(heDistance, dDistance, tDistance, vDistance);
+		// Add the concentration of each cluster in the group if its helium is large enough
+		if (std::get<0>(pair) >= minSize)
+			conc += getConcentration(heDistance, dDistance, tDistance,
+					vDistance);
 	}
 
 	return conc;
 }
 
 template<uint32_t Axis>
-double PSISuperCluster::getTotalAtomConcHelper() const {
+double PSISuperCluster::getTotalAtomConcHelper(int minSize) const {
 
 	double conc = 0;
 	for (auto const& pair : heVList) {
@@ -1010,15 +1021,17 @@ double PSISuperCluster::getTotalAtomConcHelper() const {
 		auto dDistance = getDistance(std::get<1>(pair), 1);
 		auto tDistance = getDistance(std::get<2>(pair), 2);
 		auto vDistance = getDistance(std::get<3>(pair), 3);
+		int size = std::get<Axis>(pair);
 
 		// Add the concentration of each cluster in the group times its number of helium
-		conc += getConcentration(heDistance, dDistance, tDistance, vDistance)
-				* (double) std::get<Axis>(pair);
+		if (size >= minSize)
+			conc += getConcentration(heDistance, dDistance, tDistance,
+					vDistance) * (double) size;
 	}
 	return conc;
 }
 
-double PSISuperCluster::getTotalAtomConcentration(int axis) const {
+double PSISuperCluster::getTotalAtomConcentration(int axis, int minSize) const {
 
 	assert(axis <= 2);
 
@@ -1027,13 +1040,13 @@ double PSISuperCluster::getTotalAtomConcentration(int axis) const {
 	double conc = 0;
 	switch (axis) {
 	case 0:
-		conc = getTotalAtomConcHelper<0>();
+		conc = getTotalAtomConcHelper<0>(minSize);
 		break;
 	case 1:
-		conc = getTotalAtomConcHelper<1>();
+		conc = getTotalAtomConcHelper<1>(minSize);
 		break;
 	case 2:
-		conc = getTotalAtomConcHelper<2>();
+		conc = getTotalAtomConcHelper<2>(minSize);
 		break;
 	}
 	return conc;

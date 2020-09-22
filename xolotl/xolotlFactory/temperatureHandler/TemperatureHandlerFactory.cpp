@@ -1,12 +1,15 @@
+#include <HeatEquation1DHandler.h>
+#include <HeatEquation2DHandler.h>
+#include <HeatEquation3DHandler.h>
 #include <TemperatureHandlerFactory.h>
 #include <TemperatureHandler.h>
 #include <TemperatureProfileHandler.h>
 #include <TemperatureGradientHandler.h>
-#include <HeatEquationHandler.h>
 #include <MathUtils.h>
 #include <fstream>
 #include <iostream>
 #include <mpi.h>
+#include <MPIUtils.h>
 
 namespace xolotlFactory {
 
@@ -16,7 +19,8 @@ static std::shared_ptr<xolotlCore::ITemperatureHandler> theTemperatureHandler;
 bool initializeTempHandler(const xolotlCore::Options &options) {
 	// Get the current process ID
 	int procId;
-	MPI_Comm_rank(MPI_COMM_WORLD, &procId);
+	auto xolotlComm = xolotlCore::MPIUtils::getMPIComm();
+	MPI_Comm_rank(xolotlComm, &procId);
 
 	bool ret = true;
 
@@ -49,13 +53,35 @@ bool initializeTempHandler(const xolotlCore::Options &options) {
 		if (xolotlCore::equal(options.getConstTemperature(), 0.0)) {
 			// We are to use a constant temperature handler because the flux is 0.0
 			theTemperatureHandler = std::make_shared<
-					xolotlCore::TemperatureHandler>(options.getBulkTemperature());
+					xolotlCore::TemperatureHandler>(
+					options.getBulkTemperature());
 		} else {
 			// Actually using the heat equation
-			theTemperatureHandler = std::make_shared<
-					xolotlCore::HeatEquationHandler>(
-					options.getConstTemperature(),
-					options.getBulkTemperature());
+			// Switch on the dimension
+			switch (options.getDimensionNumber()) {
+			case 1:
+				theTemperatureHandler = std::make_shared<
+						xolotlCore::HeatEquation1DHandler>(
+						options.getConstTemperature(),
+						options.getBulkTemperature());
+				break;
+			case 2:
+				theTemperatureHandler = std::make_shared<
+						xolotlCore::HeatEquation2DHandler>(
+						options.getConstTemperature(),
+						options.getBulkTemperature());
+				break;
+			case 3:
+				theTemperatureHandler = std::make_shared<
+						xolotlCore::HeatEquation3DHandler>(
+						options.getConstTemperature(),
+						options.getBulkTemperature());
+				break;
+			default:
+				// The asked dimension is not good (e.g. -1, 4)
+				throw std::string(
+						"\nxolotlFactory: Bad dimension for the heat equation handler.");
+			}
 
 			// Set the heat coefficient which depends on the material
 			auto problemType = options.getMaterial();

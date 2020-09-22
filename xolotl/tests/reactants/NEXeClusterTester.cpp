@@ -20,7 +20,7 @@ static std::shared_ptr<xolotlPerf::IHandlerRegistry> registry =
 /**
  * This suite is responsible for testing the NEXeCluster.
  */
-BOOST_AUTO_TEST_SUITE(NEXeCluster_testSuite)
+BOOST_AUTO_TEST_SUITE (NEXeCluster_testSuite)
 
 /**
  * This operation checks the ability of the NEXeCluster to describe
@@ -55,8 +55,8 @@ BOOST_AUTO_TEST_CASE(checkConnectivity) {
 BOOST_AUTO_TEST_CASE(checkFluxCalculations) {
 	// Local Declarations
 	auto network = getSimpleNEReactionNetwork();
-	// Add a grid point for the rates
-	network->addGridPoints(1);
+	// Set a fission rate for the diffusion to work
+	network->setFissionRate(8.0e-9);
 
 	// Get an Xe cluster with compostion 1,0,0.
 	auto cluster = (NECluster *) network->get(Species::Xe, 1);
@@ -72,6 +72,9 @@ BOOST_AUTO_TEST_CASE(checkFluxCalculations) {
 	secondCluster->setMigrationEnergy(0.2);
 	secondCluster->setConcentration(0.5);
 
+	// Add a grid point for the rates
+	network->addGridPoints(1);
+
 	// Compute the rate constants that are needed for the flux
 	network->setTemperature(1000.0, 0);
 	// The flux can pretty much be anything except "not a number" (nan).
@@ -79,7 +82,7 @@ BOOST_AUTO_TEST_CASE(checkFluxCalculations) {
 	BOOST_TEST_MESSAGE(
 			"NEXeClusterTester Message: \n" << "Total Flux is " << flux << "\n" << "   -Production Flux: " << cluster->getProductionFlux(0) << "\n" << "   -Combination Flux: " << cluster->getCombinationFlux(0) << "\n" << "   -Dissociation Flux: " << cluster->getDissociationFlux(0) << "\n" << "   -Emission Flux: " << cluster->getEmissionFlux(0) << "\n");
 
-	BOOST_REQUIRE_CLOSE(971367265495.44824, flux, 0.1);
+	BOOST_REQUIRE_CLOSE(2.402537, flux, 0.0001);
 
 	return;
 }
@@ -90,10 +93,11 @@ BOOST_AUTO_TEST_CASE(checkFluxCalculations) {
 BOOST_AUTO_TEST_CASE(checkPartialDerivatives) {
 	// Local Declarations
 	// The vector of partial derivatives to compare with
-	double knownPartials[] = { -196821207586.07611, 2054353911079.95,
-			573123759757.52136, 0.0 };
+	double knownPartials[] = {-0.235828, 4.9554555, 1.37341547, 0};
 	// Get the simple reaction network
 	auto network = getSimpleNEReactionNetwork(3);
+	// Set a fission rate for the diffusion to work
+	network->setFissionRate(8.0e-9);
 	// Add a grid point for the rates
 	network->addGridPoints(1);
 
@@ -114,7 +118,7 @@ BOOST_AUTO_TEST_CASE(checkPartialDerivatives) {
 
 	// Check all the values
 	for (unsigned int i = 0; i < partials.size(); i++) {
-		BOOST_REQUIRE_CLOSE(partials[i], knownPartials[i], 0.1);
+		BOOST_REQUIRE_CLOSE(partials[i], knownPartials[i], 0.001);
 	}
 
 	return;
@@ -141,6 +145,33 @@ BOOST_AUTO_TEST_CASE(checkReactionRadius) {
 				new NEXeCluster(i, *(network.get()), registry));
 		BOOST_REQUIRE_CLOSE(expectedRadii[i - 1], cluster->getReactionRadius(),
 				0.000001);
+	}
+
+	return;
+}
+
+/**
+ * This operation checks the reaction radius for NEXeCluster with a different density.
+ */
+BOOST_AUTO_TEST_CASE(checkDensity) {
+	// Create a helium cluster
+	shared_ptr<NEXeCluster> cluster;
+
+	// Get the simple reaction network with a density of 10.0 Xe nm-3
+	std::shared_ptr<xolotlPerf::IHandlerRegistry> registry = std::make_shared<
+			xolotlPerf::DummyHandlerRegistry>();
+	auto network = getSimpleNEReactionNetwork(0, registry, 10.0);
+
+	// The vector of radii to compare with
+	double expectedRadii[] = { 0.3, 0.362783, 0.415283, 0.457078, 0.492373,
+			0.523224, 0.550812, 0.575882, 0.598942, 0.62035 };
+
+	// Check all the values
+	for (int i = 1; i <= 10; i++) {
+		cluster = shared_ptr<NEXeCluster>(
+				new NEXeCluster(i, *(network.get()), registry));
+		BOOST_REQUIRE_CLOSE(expectedRadii[i - 1], cluster->getReactionRadius(),
+				0.0001);
 	}
 
 	return;

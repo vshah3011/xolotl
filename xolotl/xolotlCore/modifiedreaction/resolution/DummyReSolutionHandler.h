@@ -35,7 +35,17 @@ public:
 	 *
 	 * \see IReSolutionHandler.h
 	 */
-	void initialize(const IReactionNetwork& network) {
+	void initialize(const IReactionNetwork& network,
+			double electronicStoppingPower) {
+		return;
+	}
+
+	/**
+	 * This method updates the fission yield.
+	 *
+	 * \see IReSolutionHandler.h
+	 */
+	void setFissionYield(double yield) {
 		return;
 	}
 
@@ -80,6 +90,15 @@ public:
 	 */
 	int computePartialsForReSolution(const IReactionNetwork& network,
 			double *val, int *indices, int xi, int xs, int yj = 0, int zk = 0) {
+		return 0;
+	}
+
+	/**
+	 * Get the minimum size for a cluster to undergo re-solution.
+	 *
+	 * \see IReSolutionHandler.h
+	 */
+	int getMinSize() const {
 		return 0;
 	}
 

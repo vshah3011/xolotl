@@ -20,11 +20,6 @@ using namespace xolotlCore;
 BOOST_AUTO_TEST_SUITE (FuelFitFluxHandlerTester_testSuite)
 
 BOOST_AUTO_TEST_CASE(checkComputeIncidentFlux) {
-	// Initialize MPI for HDF5
-	int argc = 0;
-	char **argv;
-	MPI_Init(&argc, &argv);
-
 	// Create the option to create a network
 	xolotlCore::Options opts;
 	// Create a good parameter file
@@ -33,12 +28,18 @@ BOOST_AUTO_TEST_CASE(checkComputeIncidentFlux) {
 	paramFile.close();
 
 	// Create a fake command line to read the options
-	argv = new char*[2];
+	int argc = 2;
+	char **argv = new char*[3];
+	std::string appName = "fakeXolotlAppNameForTests";
+	argv[0] = new char[appName.length() + 1];
+	strcpy(argv[0], appName.c_str());
 	std::string parameterFile = "param.txt";
-	argv[0] = new char[parameterFile.length() + 1];
-	strcpy(argv[0], parameterFile.c_str());
-	argv[1] = 0; // null-terminate the array
-	opts.readParams(argv);
+	argv[1] = new char[parameterFile.length() + 1];
+	strcpy(argv[1], parameterFile.c_str());
+	argv[2] = 0; // null-terminate the array
+	// Initialize MPI for HDF5
+	MPI_Init(&argc, &argv);
+	opts.readParams(argc, argv);
 
 	// Create the network loader
 	NEClusterNetworkLoader loader = NEClusterNetworkLoader(
@@ -89,9 +90,9 @@ BOOST_AUTO_TEST_CASE(checkComputeIncidentFlux) {
 			surfacePos);
 
 	// Check the value at some grid points
-	BOOST_REQUIRE_CLOSE(newConcentration[101], 0.26666, 0.01);
-	BOOST_REQUIRE_CLOSE(newConcentration[202], 0.26666, 0.01);
-	BOOST_REQUIRE_CLOSE(newConcentration[303], 0.26666, 0.01);
+	BOOST_REQUIRE_CLOSE(newConcentration[101], 1.0, 0.01);
+	BOOST_REQUIRE_CLOSE(newConcentration[202], 1.0, 0.01);
+	BOOST_REQUIRE_CLOSE(newConcentration[303], 1.0, 0.01);
 
 	// Remove the created file
 	std::string tempFile = "param.txt";

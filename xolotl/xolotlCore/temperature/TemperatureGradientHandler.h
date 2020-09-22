@@ -82,7 +82,7 @@ public:
 	 *
 	 * @return The temperature
 	 */
-	virtual double getTemperature(const Point<3>& fraction, double) const {
+	virtual double getTemperature(const NDPoint<3>& fraction, double) const {
 		return surfaceTemperature
 				+ (bulkTemperature - surfaceTemperature) * fraction[0];
 	}
@@ -133,7 +133,8 @@ public:
 	 * \see ITemperatureHandler.h
 	 */
 	virtual void computeTemperature(double **concVector,
-			double *updatedConcOffset, double hxLeft, double hxRight, int xi) {
+			double *updatedConcOffset, double hxLeft, double hxRight, int xi,
+			double sy = 0.0, int iy = 0, double sz = 0.0, int iz = 0) {
 		return;
 	}
 
@@ -145,7 +146,8 @@ public:
 	 * \see ITemperatureHandler.h
 	 */
 	virtual void computePartialsForTemperature(double *val, int *indices,
-			double hxLeft, double hxRight, int xi) {
+			double hxLeft, double hxRight, int xi, double sy = 0.0, int iy = 0,
+			double sz = 0.0, int iz = 0) {
 		// Set the cluster index, the PetscSolver will use it to compute
 		// the row and column indices for the Jacobian
 		indices[0] = dof - 1;

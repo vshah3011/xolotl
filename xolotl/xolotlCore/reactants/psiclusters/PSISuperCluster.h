@@ -432,11 +432,12 @@ private:
 	/**
 	 * Obtain total concentration for desired species type.
 	 *
+	 * @param minSize The minimum size to take into account
 	 * @return Total concentration of species indicated by Axis
 	 * template parameter.
 	 */
 	template<uint32_t Axis>
-	double getTotalAtomConcHelper() const;
+	double getTotalAtomConcHelper(int minSize = 0) const;
 
 public:
 
@@ -673,18 +674,20 @@ public:
 
 	/**
 	 * This operation returns the current total concentration of clusters in the group.
-
+	 *
+	 * @param minSize The minimum size to take into account
 	 * @return The concentration
 	 */
-	double getTotalConcentration() const;
+	double getTotalConcentration(int minSize = 0) const;
 
 	/**
 	 * This operation returns the current total concentration of given atom in the group.
 	 *
 	 * @param axis The given atom
+	 * @param minSize The minimum size to take into account
 	 * @return The concentration
 	 */
-	double getTotalAtomConcentration(int axis = 0) const;
+	double getTotalAtomConcentration(int axis = 0, int minSize = 0) const;
 
 	/**
 	 * This operation returns the current total concentration of vacancies in the group.
@@ -791,6 +794,41 @@ public:
 	void resetConnectivities() override;
 
 	/**
+	 * Add grid points to the vector of diffusion coefficients or remove
+	 * them if the value is negative.
+	 *
+	 * @param i The number of grid point to add or remove
+	 */
+	void addGridPoints(int i) override {
+		// Don't do anything
+		return;
+	}
+
+	/**
+	 * This operation sets the temperature at which the reactant currently
+	 * exists. Temperature-dependent quantities are recomputed when this
+	 * operation is called, so the temperature should always be set first.
+	 *
+	 * @param temp The new cluster temperature
+	 * @param i The location on the grid
+	 */
+	void setTemperature(double temp, int i) override{
+		// Don't do anything
+		return;
+	}
+
+	/**
+	 * This operation returns the diffusion coefficient for this reactant and is
+	 * calculated from the diffusion factor.
+	 *
+	 * @param i The position on the grid
+	 * @return The diffusion coefficient
+	 */
+	double getDiffusionCoefficient(int i) const override {
+		return 0.0;
+	}
+
+	/**
 	 * This operation returns the total flux of this cluster in the
 	 * current network.
 	 *
@@ -816,7 +854,7 @@ public:
 	 * @param i The location on the grid in the depth direction
 	 * @return The flux due to dissociation of other clusters
 	 */
-	double getDissociationFlux(int i);
+	double getDissociationFlux(int i) override;
 
 	/**
 	 * This operation returns the total change in this cluster due its
@@ -826,7 +864,7 @@ public:
 	 * @param i The location on the grid in the depth direction
 	 * @return The flux due to its dissociation
 	 */
-	double getEmissionFlux(int i);
+	double getEmissionFlux(int i) override;
 
 	/**
 	 * This operation returns the total change in this cluster due to
@@ -836,7 +874,7 @@ public:
 	 * @param i The location on the grid in the depth direction
 	 * @return The flux due to this cluster being produced
 	 */
-	double getProductionFlux(int i);
+	double getProductionFlux(int i) override;
 
 	/**
 	 * This operation returns the total change in this cluster due to
@@ -846,7 +884,7 @@ public:
 	 * @param i The location on the grid in the depth direction
 	 * @return The flux due to this cluster combining with other clusters
 	 */
-	double getCombinationFlux(int i);
+	double getCombinationFlux(int i) override;
 
 	/**
 	 * This operation returns the total change for its first moment.

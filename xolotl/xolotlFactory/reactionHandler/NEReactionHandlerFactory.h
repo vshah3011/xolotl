@@ -4,7 +4,7 @@
 #include <memory>
 #include "IReactionHandlerFactory.h"
 #include <NEClusterNetworkLoader.h>
-#include <NEClusterReactionNetwork.h>
+#include <MPIUtils.h>
 
 namespace xolotlFactory {
 
@@ -44,7 +44,8 @@ public:
 			std::shared_ptr<xolotlPerf::IHandlerRegistry> registry) {
 		// Get the current process ID
 		int procId;
-		MPI_Comm_rank(MPI_COMM_WORLD, &procId);
+		auto xolotlComm = xolotlCore::MPIUtils::getMPIComm();
+		MPI_Comm_rank(xolotlComm, &procId);
 
 		// Create a NEClusterNetworkLoader
 		auto tempNetworkLoader = std::make_shared<
@@ -71,6 +72,8 @@ public:
 					<< "Master loaded network of size "
 					<< theNetworkHandler->size() << "." << std::endl;
 		}
+		// Set the fission rate in the network
+		theNetworkHandler->setFissionRate(options.getFluxAmplitude());
 	}
 
 	/**

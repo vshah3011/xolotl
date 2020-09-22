@@ -463,7 +463,7 @@ void FeSuperCluster::participateIn(ProductionReaction& reaction,
 
 	// Update the coefficients
 	std::for_each(pendingPRInfos.begin(), pendingPRInfos.end(),
-			[this,&combCluster,&otherCluster](const PendingProductionReactionInfo& currPRInfo) {
+			[this,&combCluster](const PendingProductionReactionInfo& currPRInfo) {
 
 				// Use names corresponding to the single-item version.
 				int a = currPRInfo.b[0];
@@ -1146,7 +1146,7 @@ void FeSuperCluster::setHeVVector(std::vector<std::pair<int, int> > vec) {
 	double nHeSquare = 0.0, nVSquare = 0.0;
 	// Update the network map, compute the radius and dispersions
 	for (auto it = vec.begin(); it != vec.end(); it++) {
-		reactionRadius += xolotlCore::ironLatticeConstant
+		reactionRadius += network.getLatticeParameter()
 				* pow((3.0 * (double) ((*it).second)) / xolotlCore::pi,
 						(1.0 / 3.0)) * 0.5 / (double) nTot;
 
@@ -1202,7 +1202,7 @@ double FeSuperCluster::getTotalConcentration() const {
 	return conc;
 }
 
-double FeSuperCluster::getTotalHeliumConcentration() const {
+double FeSuperCluster::getTotalHeliumConcentration(int minSize) const {
 	// Initial declarations
 	double heDistance = 0.0, vDistance = 0.0, conc = 0.0;
 
@@ -1214,7 +1214,7 @@ double FeSuperCluster::getTotalHeliumConcentration() const {
 			vDistance = getVDistance(j);
 
 			// Add the concentration of each cluster in the group times its number of helium
-			conc += getConcentration(heDistance, vDistance) * (double) i;
+			if (i >= minSize) conc += getConcentration(heDistance, vDistance) * (double) i;
 		}
 	}
 

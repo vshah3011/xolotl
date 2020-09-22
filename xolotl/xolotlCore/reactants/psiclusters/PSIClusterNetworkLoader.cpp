@@ -15,6 +15,7 @@
 #include <PSIDCluster.h>
 #include <PSITCluster.h>
 #include <MathUtils.h>
+#include <MPIUtils.h>
 #include <cassert>
 
 using namespace xolotlCore;
@@ -118,10 +119,12 @@ std::unique_ptr<PSICluster> PSIClusterNetworkLoader::createPSICluster(int numHe,
 		cluster = new PSIInterstitialCluster(numI, network, handlerRegistry);
 	} else if (numD > 0) {
 		// Create a new DCluster
-		cluster = new PSIDCluster(numD, network, handlerRegistry);
+		cluster = new PSIDCluster(numD, hydrogenRadiusFactor, network,
+				handlerRegistry);
 	} else if (numT > 0) {
 		// Create a new TCluster
-		cluster = new PSITCluster(numT, network, handlerRegistry);
+		cluster = new PSITCluster(numT, hydrogenRadiusFactor, network,
+				handlerRegistry);
 	}
 	assert(cluster != nullptr);
 
@@ -207,9 +210,27 @@ std::unique_ptr<IReactionNetwork> PSIClusterNetworkLoader::load(
 	std::unique_ptr<PSIClusterReactionNetwork> network(
 			new PSIClusterReactionNetwork(handlerRegistry));
 
+	// Set the lattice parameter in the network
+	double latticeParam = options.getLatticeParameter();
+	if (!(latticeParam > 0.0))
+		latticeParam = tungstenLatticeConstant;
+	network->setLatticeParameter(latticeParam);
+
+	// Set the helium radius in the network
+	double radius = options.getImpurityRadius();
+	if (!(radius > 0.0))
+		radius = heliumRadius;
+	network->setImpurityRadius(radius);
+
+	// Set the interstitial bias in the network
+	network->setInterstitialBias(options.getBiasFactor());
+
+	// Set the hydrogan radius factor
+	hydrogenRadiusFactor = options.getHydrogenFactor();
+
 	std::string error(
 			"PSIClusterNetworkLoader Exception: Insufficient or erroneous data.");
-	int numHe = 0, numV = 0, numI = 0, numW = 0, numD = 0, numT = 0;
+	int numHe = 0, numV = 0, numI = 0, numD = 0, numT = 0;
 	double formationEnergy = 0.0, migrationEnergy = 0.0;
 	double diffusionFactor = 0.0;
 	std::vector<std::reference_wrapper<Reactant> > reactants;
@@ -282,7 +303,8 @@ std::unique_ptr<IReactionNetwork> PSIClusterNetworkLoader::load(
 
 //	// Dump the network we've created, if desired.
 //	int rank;
-//	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+//	auto xolotlComm = xolotlCore::MPIUtils::getMPIComm();
+//	MPI_Comm_rank(xolotlComm, &rank);
 //	if (rank == 0) {
 //		// Dump the network we've created for comparison with baseline.
 //		std::ofstream networkStream(netDebugOpts.second);
@@ -304,11 +326,30 @@ std::unique_ptr<IReactionNetwork> PSIClusterNetworkLoader::generate(
 			options.getMaxT();
 	bool usePhaseCut = options.usePhaseCut();
 	int numHe = 0, numD = 0, numT = 0, numV = 0, numI = 0;
+	double heVRatio = options.getHeVRatio();
 
 	// Once we have C++14, use std::make_unique.
 	std::unique_ptr<PSIClusterReactionNetwork> network(
 			new PSIClusterReactionNetwork(handlerRegistry));
 	std::vector<std::reference_wrapper<Reactant> > reactants;
+
+	// Set the lattice parameter in the network
+	double latticeParam = options.getLatticeParameter();
+	if (!(latticeParam > 0.0))
+		latticeParam = tungstenLatticeConstant;
+	network->setLatticeParameter(latticeParam);
+
+	// Set the helium radius in the network
+	double radius = options.getImpurityRadius();
+	if (!(radius > 0.0))
+		radius = heliumRadius;
+	network->setImpurityRadius(radius);
+
+	// Set the interstitial bias in the network
+	network->setInterstitialBias(options.getBiasFactor());
+
+	// Set the hydrogan radius factor
+	hydrogenRadiusFactor = options.getHydrogenFactor();
 
 	// Generate the I clusters
 	for (int i = 1; i <= maxI; ++i) {
@@ -322,14 +363,15 @@ std::unique_ptr<IReactionNetwork> PSIClusterNetworkLoader::generate(
 		if (i <= iFormationEnergies.size())
 			nextCluster->setFormationEnergy(iFormationEnergies[i - 1]);
 		else
-			nextCluster->setFormationEnergy(48.0 + 6.0 * ((double) i - 6.0));
+			nextCluster->setFormationEnergy(
+					iFormationEnergies[iFormationEnergies.size() - 1]
+							+ (double) (i - iFormationEnergies.size()));
 		if (i <= iDiffusion.size()) {
 			nextCluster->setDiffusionFactor(iDiffusion[i - 1]);
 			nextCluster->setMigrationEnergy(iMigration[i - 1]);
 		} else {
-			nextCluster->setDiffusionFactor(0.0);
-			nextCluster->setMigrationEnergy(
-					std::numeric_limits<double>::infinity());
+			nextCluster->setDiffusionFactor(iDiffusion[0] / (double) i);
+			nextCluster->setMigrationEnergy(min((double) i, 15.0) * 0.1);
 		}
 
 		// Save it in the network
@@ -628,7 +670,6 @@ std::unique_ptr<IReactionNetwork> PSIClusterNetworkLoader::generate(
 		}
 
 		// Create V and HeV up to the maximum length with a constant nHe/nV
-		// = 4.
 		for (int i = maxHePerV.size() + 1; i <= maxV; i++) {
 			// Create the V cluster
 			numV = i;
@@ -650,19 +691,21 @@ std::unique_ptr<IReactionNetwork> PSIClusterNetworkLoader::generate(
 			pushPSICluster(network, reactants, nextCluster);
 
 			// Loop on the helium number
-			int upperHe = numV * 4;
+			int upperHe = max((int) (numV * heVRatio),
+					maxHePerV[maxHePerV.size() - 1] + numV
+							- (int) maxHePerV.size());
 			if (maxHe <= 0)
 				upperHe = 0;
 			for (int j = 0; j <= upperHe; j++) {
 				numHe = j;
 				// Loop on the deuterium number
-				int upperD = (int) ((2.0 / 3.0) * (double) numV * 4.0);
+				int upperD = (int) ((2.0 / 3.0) * (double) upperHe);
 				if (maxD <= 0)
 					upperD = 0;
 				for (int k = 0; k <= upperD; k++) {
 					numD = k;
 					// Loop on the tritium number
-					int upperT = (int) ((2.0 / 3.0) * (double) numV * 4.0);
+					int upperT = (int) ((2.0 / 3.0) * (double) upperHe);
 					if (maxT <= 0)
 						upperT = 0;
 					for (int l = 0; l <= upperT; l++) {
@@ -678,6 +721,7 @@ std::unique_ptr<IReactionNetwork> PSIClusterNetworkLoader::generate(
 //							continue;
 
 						// Too many hydrogen
+						// TODO how should the HeV ratio should be taken into account here?
 						if ((numHe == 0 && numD + numT > 6 * numV)
 								|| (numHe > 0
 										&& numD + numT
@@ -778,7 +822,8 @@ std::unique_ptr<IReactionNetwork> PSIClusterNetworkLoader::generate(
 
 //	// Dump the network we've created, if desired.
 //	int rank;
-//	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+//	auto xolotlComm = xolotlCore::MPIUtils::getMPIComm();
+//	MPI_Comm_rank(xolotlComm, &rank);
 //	if (rank == 0) {
 //		// Dump the network we've created for comparison with baseline.
 //		std::ofstream networkStream(netDebugOpts.second);
@@ -926,7 +971,9 @@ void PSIClusterNetworkLoader::applySectionalGrouping(
 
 	// Print the total size before grouping
 	int procId;
-	MPI_Comm_rank(MPI_COMM_WORLD, &procId);
+	// Get the MPI communicator
+	auto xolotlComm = xolotlCore::MPIUtils::getMPIComm();
+	MPI_Comm_rank(xolotlComm, &procId);
 	if (procId == 0)
 		std::cout << "Total size: " << network.size() + heVList.size()
 				<< std::endl;
@@ -1053,17 +1100,18 @@ void PSIClusterNetworkLoader::applySectionalGrouping(
 
 			// Create the super cluster
 			double size[4] = { heSize, dSize, tSize, (double) k };
-			int width[4] = { heHigh - heLow + 1, dHigh - dLow + 1, tHigh - tLow + 1,
-					1 };
+			int width[4] = { heHigh - heLow + 1, dHigh - dLow + 1, tHigh - tLow
+					+ 1, 1 };
 			int lower[4] = { heLow, dLow, tLow, k };
 			int higher[4] = { heHigh, dHigh, tHigh, k };
 			PSISuperCluster* rawSuperCluster = new PSISuperCluster(size, count,
 					width, lower, higher, network, handlerRegistry);
 
-	//		std::cout << "super: " << rawSuperCluster->getName() << " " << count
-	//				<< " " << heLow << " " << heHigh << " " << upperH << std::endl;
+			//		std::cout << "super: " << rawSuperCluster->getName() << " " << count
+			//				<< " " << heLow << " " << heHigh << " " << upperH << std::endl;
 
-			auto superCluster = std::unique_ptr<PSISuperCluster>(rawSuperCluster);
+			auto superCluster = std::unique_ptr<PSISuperCluster>(
+					rawSuperCluster);
 			// Save access to the cluster so we can trigger updates
 			// after we give it to the network.
 			auto& scref = *superCluster;

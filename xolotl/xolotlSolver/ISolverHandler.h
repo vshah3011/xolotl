@@ -11,8 +11,10 @@
 #include <IAdvectionHandler.h>
 #include <ITrapMutationHandler.h>
 #include <IReSolutionHandler.h>
+#include <IHeterogeneousNucleationHandler.h>
 #include <IMaterialFactory.h>
 #include <IReactionNetwork.h>
+#include <NDArray.h>
 
 namespace xolotlSolver {
 
@@ -61,6 +63,66 @@ public:
 	 * @param C The PETSc solution vector
 	 */
 	virtual void initializeConcentration(DM &da, Vec &C) = 0;
+
+	/**
+	 * Set the concentrations to 0.0 where the GBs are.
+	 *
+	 * @param da The PETSc distributed array
+	 * @param C The PETSc solution vector
+	 */
+	virtual void initGBLocation(DM &da, Vec &C) = 0;
+
+	/**
+	 * This operation get the concentration vector with the ids.
+	 *
+	 * @param da The PETSc distributed array
+	 * @param C The PETSc solution vector
+	 * @return The concentration vector
+	 */
+	virtual std::vector<
+			std::vector<std::vector<std::vector<std::pair<int, double> > > > > getConcVector(
+			DM &da, Vec &C) = 0;
+
+	/**
+	 * This operation sets the concentration vector in the current state of the simulation.
+	 *
+	 * @param da The PETSc distributed array
+	 * @param C The PETSc solution vector
+	 * @param The concentration vector
+	 */
+	virtual void setConcVector(DM &da, Vec &C,
+			std::vector<
+					std::vector<
+							std::vector<std::vector<std::pair<int, double> > > > > & concVector) = 0;
+
+	/**
+	 * Get the previous time.
+	 *
+	 * @return The previous time
+	 */
+	virtual double getPreviousTime() = 0;
+
+	/**
+	 * Set the previous time.
+	 *
+	 * @param time The previous time
+	 * @param updateFluence To know whether the fluence should be updated
+	 */
+	virtual void setPreviousTime(double time, bool updateFluence = false) = 0;
+
+	/**
+	 * Get the number of Xe that went to the GB.
+	 *
+	 * @return The number of Xenon
+	 */
+	virtual double getNXeGB() = 0;
+
+	/**
+	 * Set the number of Xe that went to the GB.
+	 *
+	 * @param nXe The number of Xenon
+	 */
+	virtual void setNXeGB(double nXe) = 0;
 
 	/**
 	 * Compute the new concentrations for the RHS function given an initial
@@ -164,11 +226,133 @@ public:
 	virtual double getTauBursting() const = 0;
 
 	/**
+	 * Get the bursting factor for likelihood of bursting.
+	 *
+	 * @return The factor
+	 */
+	virtual double getBurstingFactor() const = 0;
+
+	/**
+	 * Get the HeV ratio.
+	 *
+	 * @return The ratio
+	 */
+	virtual double getHeVRatio() const = 0;
+
+	/**
+	 * Get the bursting minimum size parameter.
+	 *
+	 * @return The minimum size
+	 */
+	virtual int getMinSizeBursting() const = 0;
+
+	/**
+	 * Get the grid left offset.
+	 *
+	 * @return The offset
+	 */
+	virtual int getLeftOffset() const = 0;
+
+	/**
 	 * Get the grid right offset.
 	 *
 	 * @return The offset
 	 */
 	virtual int getRightOffset() const = 0;
+
+	/**
+	 * Create the local Xe rate vector and the previous Xe flux one.
+	 *
+	 * @param a The size in the x direction
+	 * @param b The size in the y direction
+	 * @param c The size in the y direction
+	 */
+	virtual void createLocalNE(int a, int b = 1, int c = 1) = 0;
+
+	/**
+	 * Set the latest value of the local Xe rate.
+	 *
+	 * @param rate The latest value of rate
+	 * @param i The x coordinate of the location
+	 * @param j The y coordinate of the location
+	 * @param z The z coordinate of the location
+	 */
+	virtual void setLocalXeRate(double rate, int i, int j = 0, int k = 0) = 0;
+
+	/**
+	 * Set the whole vector of local Xe rate.
+	 *
+	 * @param rateVector The vector to replace the local Xe rate.
+	 */
+	virtual void setLocalNE(
+			std::vector<
+					std::vector<
+							std::vector<
+									std::tuple<double, double, double, double> > > > rateVector) = 0;
+
+	/**
+	 * Get the local Xe rate vector that needs to be passed.
+	 *
+	 * @return The vector of rates
+	 */
+	virtual std::vector<
+			std::vector<std::vector<std::tuple<double, double, double, double> > > > & getLocalNE() = 0;
+
+	/**
+	 * Set the latest value of the Xe flux.
+	 *
+	 * @param flux The latest value of flux
+	 * @param i The x coordinate of the location
+	 * @param j The y coordinate of the location
+	 * @param z The z coordinate of the location
+	 */
+	virtual void setPreviousXeFlux(double flux, int i, int j = 0,
+			int k = 0) = 0;
+
+	/**
+	 * Set the latest value of the Xe monomer concentration.
+	 *
+	 * @param conc The latest value of conc
+	 * @param i The x coordinate of the location
+	 * @param j The y coordinate of the location
+	 * @param z The z coordinate of the location
+	 */
+	virtual void setMonomerConc(double conc, int i, int j = 0,
+			int k = 0) = 0;
+
+	/**
+	 * Set the latest value of the volume fraction.
+	 *
+	 * @param frac The latest value of the fration
+	 * @param i The x coordinate of the location
+	 * @param j The y coordinate of the location
+	 * @param z The z coordinate of the location
+	 */
+	virtual void setVolumeFraction(double frac, int i, int j = 0,
+			int k = 0) = 0;
+
+	/**
+	 * Set the coordinates covered by the local grid.
+	 *
+	 * @param xs, xm The start and width in the X direction on the local MPI process
+	 * @param ys, ym The start and width in the Y direction on the local MPI process
+	 * @param zs, zm The start and width in the Z direction on the local MPI process
+	 */
+	virtual void setLocalCoordinates(int xs, int xm, int ys = 0, int ym = 0,
+			int zs = 0, int zm = 0) = 0;
+
+	/**
+	 * Get the coordinates covered by the local grid.
+	 *
+	 * @param xs, xm The start and width in the X direction on the local MPI process
+	 * @param Mx The total width in the X direction
+	 * @param ys, ym The start and width in the Y direction on the local MPI process
+	 * @param My The total width in the Y direction
+	 * @param zs, zm The start and width in the Z direction on the local MPI process
+	 * @param Mz The total width in the Z direction
+	 */
+	virtual void getLocalCoordinates(int &xs, int &xm, int &Mx, int &ys,
+			int &ym, int &My, int &zs, int &zm, int &Mz) = 0;
 
 	/**
 	 * To know if the surface should be able to move.
@@ -185,6 +369,13 @@ public:
 	virtual bool burstBubbles() const = 0;
 
 	/**
+	 * Get the minimum size for computing average radius.
+	 *
+	 * @return The minimum size
+	 */
+	virtual xolotlCore::Array<int, 4> getMinSizes() const = 0;
+
+	/**
 	 * Get the flux handler.
 	 *
 	 * @return The flux handler
@@ -197,6 +388,13 @@ public:
 	 * @return The temperature handler
 	 */
 	virtual xolotlCore::ITemperatureHandler *getTemperatureHandler() const = 0;
+
+	/**
+	 * Get the diffusion handler.
+	 *
+	 * @return The diffusion handler
+	 */
+	virtual xolotlCore::IDiffusionHandler *getDiffusionHandler() const = 0;
 
 	/**
 	 * Get the advection handler.
@@ -220,6 +418,20 @@ public:
 	virtual xolotlCore::ITrapMutationHandler *getMutationHandler() const = 0;
 
 	/**
+	 * Get the re-solution handler.
+	 *
+	 * @return The re-solution handler
+	 */
+	virtual xolotlCore::IReSolutionHandler *getReSolutionHandler() const = 0;
+
+	/**
+	 * Get the heterogeneous nucleation handler.
+	 *
+	 * @return The heterogeneous nucleation handler
+	 */
+	virtual xolotlCore::IHeterogeneousNucleationHandler *getHeterogeneousNucleationHandler() const = 0;
+
+	/**
 	 * Get the network.
 	 *
 	 * @return The network
@@ -240,6 +452,69 @@ public:
 	 * @return The RandomNumberGenerator object to use.
 	 */
 	virtual RandomNumberGenerator<int, unsigned int>& getRNG(void) const = 0;
+
+	/**
+	 * Set the file name containing the location of GB.
+	 *
+	 * @param name The filename
+	 */
+	virtual void setGBFileName(std::string name) = 0;
+
+	/**
+	 * Get the vector containing the location of GB.
+	 *
+	 * @return The GB vector
+	 */
+	virtual std::vector<std::tuple<int, int, int> > getGBVector() const = 0;
+
+	/**
+	 * Set the location of one GB grid point.
+	 *
+	 * @param i, j, k The coordinate of the GB
+	 */
+	virtual void setGBLocation(int i, int j = 0, int k = 0) = 0;
+
+	/**
+	 * Reset the GB vector.
+	 */
+	virtual void resetGBVector() = 0;
+
+        /** 
+         * Get the coordinates covered by the local grid using copying method.
+         *
+         * @param xs, xm The start and width in the X direction on the local MPI process
+         * @param Mx The total width in the X direction
+         * @param ys, ym The start and width in the Y direction on the local MPI process
+         * @param My The total width in the Y direction
+         * @param zs, zm The start and width in the Z direction on the local MPI process
+         * @param Mz The total width in the Z direction
+         */
+        virtual void getLocalCoordinatesCpy(int *xs, int *xm, int *Mx, int *ys,
+                        int *ym, int *My, int *zs, int *zm, int *Mz) = 0;
+
+        /** 
+         * Passing the XeRate at i,j,k point.
+         * \see ISolverHandler.h
+         */
+        virtual double getXeRatePoint(int i, int j, int k) = 0;
+
+        /** 
+         * Passing the XeFlux at i,j,k point.
+         * \see ISolverHandler.h
+         */
+        virtual double getXeFluxPoint(int i, int j, int k) = 0;
+
+        /** 
+         * Passing the XeConc at i,j,k point.
+         * \see ISolverHandler.h
+         */
+        virtual double getXeConcPoint(int i, int j, int k) = 0;
+
+        /** 
+         * Passing the XeVolFrac at i,j,k point.
+         * \see ISolverHandler.h
+         */
+        virtual double getXeVolFracPoint(int i, int j, int k) = 0;
 
 };
 //end class ISolverHandler

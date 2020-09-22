@@ -3,6 +3,7 @@
 
 #include "FluxHandler.h"
 #include <cmath>
+#include <MathUtils.h>
 
 namespace xolotlCore {
 
@@ -44,8 +45,11 @@ public:
 	 */
 	void initializeFluxHandler(const IReactionNetwork& network, int surfacePos,
 			std::vector<double> grid) {
-		// Call the general method
-		FluxHandler::initializeFluxHandler(network, surfacePos, grid);
+		// Set the grid
+		xGrid = grid;
+
+		// Skip if the flux amplitude is 0.0 and we are not using a time profile
+		if (equal(fluxAmplitude, 0.0) && !useTimeProfile) return;
 
 		// Set the flux index corresponding the the single xenon cluster here
 		auto fluxCluster = network.get(Species::Xe, 1);
@@ -56,6 +60,27 @@ public:
 							"cannot use the flux option!");
 		}
 		fluxIndices.push_back(fluxCluster->getId() - 1);
+
+		return;
+	}
+
+	/**
+	 * This operation computes the flux due to incoming particles at a given grid point.
+	 * \see IFluxHandler.h
+	 */
+	void computeIncidentFlux(double currentTime,
+			double *updatedConcOffset, int xi, int surfacePos) {
+		// Skip if no index was set
+		if (fluxIndices.size() == 0) return;
+
+		// 0D Case
+		if (xGrid.size() == 0) {
+			updatedConcOffset[fluxIndices[0]] += fluxAmplitude;
+			return;
+		}
+
+		// Update the concentration array
+		updatedConcOffset[fluxIndices[0]] += fluxAmplitude;
 
 		return;
 	}

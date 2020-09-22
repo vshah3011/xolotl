@@ -2,9 +2,14 @@
 #define SOLVERHANDLER_H
 
 // Includes
-#include "ISolverHandler.h"
-#include "RandomNumberGenerator.h"
-#include "xolotlCore/io/XFile.h"
+#include <ISolverHandler.h>
+#include <RandomNumberGenerator.h>
+#include <XFile.h>
+#include <MPIUtils.h>
+#include <TokenizedLineReader.h>
+#include <Constants.h>
+#include <TokenizedLineReader.h>
+#include <fstream>
 
 namespace xolotlSolver {
 
@@ -15,8 +20,18 @@ namespace xolotlSolver {
 class SolverHandler: public ISolverHandler {
 protected:
 
+	/**
+	 * The vector to know where the GB are.
+	 *
+	 * The first pair is the location of a grid point (X,Y),
+	 */
+	std::vector<std::tuple<int, int, int> > gbVector;
+
 	//! The name of the network file
 	std::string networkName;
+
+	//! The name of the free GB file
+	std::string gbFileName;
 
 	//! The original network created from the network loader.
 	xolotlCore::IReactionNetwork& network;
@@ -42,12 +57,38 @@ protected:
 	//! The grid step size in the z direction.
 	double hZ;
 
+	//! The local start of grid points in the X direction.
+	int localXS;
+
+	//! The local width of grid points in the X direction.
+	int localXM;
+
+	//! The local start of grid points in the Y direction.
+	int localYS;
+
+	//! The local width of grid points in the Y direction.
+	int localYM;
+
+	//! The local start of grid points in the Z direction.
+	int localZS;
+
+	//! The local width of grid points in the Z direction.
+	int localZM;
+
 	//! The number of grid points by which the boundary condition should be shifted at this side.
 	int leftOffset, rightOffset, bottomOffset, topOffset, frontOffset,
 			backOffset;
 
 	//! The initial vacancy concentration.
 	double initialVConc;
+
+	//! The vector of quantities to pass to MOOSE.
+	// 0: Xe rate, 1: previous flux, 2: monomer concentration, 3: volume fraction
+	std::vector<
+			std::vector<std::vector<std::tuple<double, double, double, double> > > > localNE;
+
+	//! The electronic stopping power for re-solution
+	double electronicStoppingPower;
 
 	//! The original flux handler created.
 	xolotlCore::IFluxHandler *fluxHandler;
@@ -67,14 +108,20 @@ protected:
 	//! The original re-solution handler created.
 	xolotlCore::IReSolutionHandler *resolutionHandler;
 
+	//! The original heterogeneous nucleation handler created.
+	xolotlCore::IHeterogeneousNucleationHandler *nucleationHandler;
+
 	//! The number of dimensions for the problem.
 	int dimension;
 
 	//! The portion of void at the beginning of the problem.
 	double portion;
 
-	//! If the user wants to use a regular grid.
-	bool useRegularGrid;
+	//! Which type of grid does the used want to use.
+	std::string useRegularGrid;
+
+	//! If the user wants to use a Chebyshev grid.
+	bool readInGrid;
 
 	//! If the user wants to move the surface.
 	bool movingSurface;
@@ -82,33 +129,134 @@ protected:
 	//! If the user wants to burst bubbles.
 	bool bubbleBursting;
 
+	//! If the user wants to use x mirror boundary conditions or periodic ones.
+	bool isMirror;
+
+	//! If the user wants to attenuate the modified trap mutation.
+	bool useAttenuation;
+
 	//! The sputtering yield for the problem.
 	double sputteringYield;
 
 	//! The depth parameter for the bubble bursting.
 	double tauBursting;
 
+	//! The minimum size for the bubble bursting.
+	int minSizeBursting;
+
+	//! The factor involved in computing bursting likelihood.
+	double burstingFactor;
+
+	//! The ratio of He per V in a bubble.
+	double heVRatio;
+
 	//! The value to use to seed the random number generator.
 	unsigned int rngSeed;
+
+	//! The minimum sizes for average radius computation.
+	xolotlCore::Array<int, 4> minRadiusSizes;
+
+	//! The previous time.
+	double previousTime;
+
+	//! The number of xenon atoms that went to the GB
+	double nXeGB;
 
 	//! The random number generator to use.
 	std::unique_ptr<RandomNumberGenerator<int, unsigned int>> rng;
 
-	//! Method generating the grid in the x direction
+	/**
+	 * Method generating the grid in the x direction
+	 *
+	 * @param nx The number of grid points
+	 * @param hx The step size
+	 * @param surfacePos The position of the surface on the grid
+	 * @param isPSI To know if we want a PSI grid or a NE grid
+	 */
 	void generateGrid(int nx, double hx, int surfacePos) {
 		// Clear the grid
 		grid.clear();
 
+		// Check if we want to read in the grid from a file
+		if (readInGrid) {
+			// Open the corresponding file
+			std::ifstream inputFile(useRegularGrid.c_str());
+			if (!inputFile)
+				std::cerr
+						<< "\nCould not open the file containing the grid spacing information. "
+								"Aborting!\n" << std::endl;
+			// Get the data
+			std::string line;
+			getline(inputFile, line);
+
+			// Break the line into a vector
+			xolotlCore::TokenizedLineReader<double> reader;
+			auto argSS = std::make_shared<std::istringstream>(line);
+			reader.setInputStream(argSS);
+			auto tokens = reader.loadLine();
+
+			if (tokens.size() == 0)
+				std::cerr
+						<< "\nDid not read correctly the file containing the grid spacing information. "
+								"Aborting!\n" << std::endl;
+
+			// Compute the offset to add to the grid for boundary conditions
+			double offset = tokens[1] - tokens[0];
+			// Add the first grid point
+			grid.push_back(0.0);
+			// Check the location of the first grid point
+			if (tokens[0] > 0.0) {
+				grid.push_back(offset);
+			}
+
+			// Loop on the tokens
+			for (int i = 0; i < tokens.size(); i++) {
+				grid.push_back(tokens[i] + offset);
+			}
+
+			// Add the last grid point for boundary conditions
+			grid.push_back(
+					2.0 * tokens[tokens.size() - 1] - tokens[tokens.size() - 2]
+							+ offset);
+
+			// Set the number of grid points
+			nX = grid.size() - 2;
+
+			return;
+		}
+
+		// Maybe the user wants a Chebyshev grid
+		if (useRegularGrid == "cheby") {
+			// The first grid point will be at x = 0.0
+			grid.push_back(0.0);
+			grid.push_back(0.0);
+
+			// In that case hx correspond to the full length of the grid
+			for (int l = 1; l <= nx - 1; l++) {
+				grid.push_back(
+						(hx / 2.0)
+								* (1.0
+										- cos(
+												xolotlCore::pi * double(l)
+														/ double(nx - 1))));
+			}
+			// The last grid point will be at x = hx
+			grid.push_back(hx);
+
+			return;
+		}
 		// Check if the user wants a regular grid
-		if (useRegularGrid) {
+		if (useRegularGrid == "regular") {
 			// The grid will me made of nx + 1 points separated by hx nm
 			for (int l = 0; l <= nx + 1; l++) {
 				grid.push_back((double) l * hx);
 			}
+
+			return;
 		}
 		// If it is not regular do a fine mesh close to the surface and
 		// increase the step size when away from the surface
-		else {
+		else if (useRegularGrid == "PSI") {
 			// Initialize the value of the previous point
 			double previousPoint = 0.0;
 
@@ -205,6 +353,73 @@ protected:
 					previousPoint += 1000000.0;
 				}
 			}
+
+			return;
+		}
+		// If it is not regular do a fine mesh near points of interests
+		else if (useRegularGrid == "NE") {
+			// Initialize the value of the previous point
+			double previousPoint = 0.0;
+
+			// Loop on all the grid points
+			for (int l = 0; l <= nx + 1; l++) {
+				// Add the previous point
+				grid.push_back(previousPoint);
+				// 10nm step near the surface (x < 200nm)
+				if (l < surfacePos + 21) {
+					previousPoint += 10;
+				}
+				// 100nm step size (200nm < x < 1um)
+				else if (l < surfacePos + 29) {
+					previousPoint += 100;
+				}
+				// 1um step size (1um < x < 5um)
+				else if (l < surfacePos + 33) {
+					previousPoint += 1000;
+				}
+				// 5um step size (5um < x < 45um)
+				else if (l < surfacePos + 41) {
+					previousPoint += 5000;
+				}
+				// 1um step size (45um < x < 49um)
+				else if (l < surfacePos + 45) {
+					previousPoint += 1000;
+				}
+				// 100nm step size
+				else if (l < surfacePos + 53) {
+					previousPoint += 100;
+				}
+				// 10nm step size
+				else if (l < surfacePos + 93) {
+					previousPoint += 10;
+				}
+				// 100nm step size
+				else if (l < surfacePos + 101) {
+					previousPoint += 100;
+				}
+				// 1um step size
+				else if (l < surfacePos + 105) {
+					previousPoint += 1000;
+				}
+				// 5um step size
+				else if (l < surfacePos + 113) {
+					previousPoint += 5000;
+				}
+				// 1um step size
+				else if (l < surfacePos + 117) {
+					previousPoint += 1000;
+				}
+				// 100nm step size
+				else if (l < surfacePos + 125) {
+					previousPoint += 100;
+				}
+				// 10nm step size
+				else {
+					previousPoint += 10;
+				}
+			}
+
+			return;
 		}
 
 		return;
@@ -216,14 +431,18 @@ protected:
 	 * @param _network The reaction network to use.
 	 */
 	SolverHandler(xolotlCore::IReactionNetwork& _network) :
-			network(_network), networkName(""), nX(0), nY(0), nZ(0), hX(0.0), hY(
-					0.0), hZ(0.0), leftOffset(1), rightOffset(1), bottomOffset(
+			network(_network), networkName(""), gbFileName(""), nX(0), nY(0), nZ(0), hX(0.0), hY(
+					0.0), hZ(0.0), localXS(0), localXM(0), localYS(
+							0), localYM(0), localZS(0), localZM(0), leftOffset(1), rightOffset(1), bottomOffset(
 					1), topOffset(1), frontOffset(1), backOffset(1), initialVConc(
-					0.0), dimension(-1), portion(0.0), useRegularGrid(true), movingSurface(
-					false), bubbleBursting(false), sputteringYield(0.0), fluxHandler(
-					nullptr), temperatureHandler(nullptr), diffusionHandler(
-					nullptr), mutationHandler(nullptr), tauBursting(10.0) {
-	}
+					0.0), electronicStoppingPower(0.0), dimension(-1), portion(
+					0.0), useRegularGrid(""), readInGrid(false), movingSurface(
+					false), bubbleBursting(false), useAttenuation(false), sputteringYield(
+					0.0), fluxHandler(nullptr), temperatureHandler(nullptr), diffusionHandler(
+					nullptr), mutationHandler(nullptr), resolutionHandler(
+					nullptr), nucleationHandler(nullptr), tauBursting(10.0), minSizeBursting(
+					0), burstingFactor(0.1), rngSeed(0), heVRatio(4.0), previousTime(0.0), nXeGB(
+							0.0) {}
 
 public:
 
@@ -244,11 +463,11 @@ public:
 
 		// Determine who I am.
 		int myProcId = -1;
-		MPI_Comm_rank(MPI_COMM_WORLD, &myProcId);
+		auto xolotlComm = xolotlCore::MPIUtils::getMPIComm();
+		MPI_Comm_rank(xolotlComm, &myProcId);
 
 		// Initialize our random number generator.
 		bool useRNGSeedFromOptions = false;
-		bool printRNGSeed = false;
 		std::tie(useRNGSeedFromOptions, rngSeed) = options.getRNGSeed();
 		if (not useRNGSeedFromOptions) {
 			// User didn't give a seed value to use, so
@@ -313,9 +532,21 @@ public:
 		// Set the re-solution handler
 		resolutionHandler =
 				(xolotlCore::IReSolutionHandler *) material->getReSolutionHandler().get();
+		// Set its minimum size
+		resolutionHandler->setMinSize(options.getResoMinSize());
+
+		// Set the heterogeneous nucleation handler
+		nucleationHandler =
+				(xolotlCore::IHeterogeneousNucleationHandler *) material->getNucleationHandler().get();
+
+		// Set the minimum size for the average radius compuation
+		minRadiusSizes = options.getRadiusMinSizes();
 
 		// Set the initial vacancy concentration
 		initialVConc = options.getInitialVConcentration();
+
+		// Set the electronic stopping power
+		electronicStoppingPower = options.getZeta();
 
 		// Set the number of dimension
 		dimension = options.getDimensionNumber();
@@ -326,13 +557,41 @@ public:
 		// Set the sputtering yield
 		sputteringYield = options.getSputteringYield();
 
-		// Set the sputtering yield
+		// Set the bursting depth
 		tauBursting = options.getBurstingDepth();
 
-		// Look at if the user wants to use a regular grid in the x direction
-		useRegularGrid = options.useRegularXGrid();
+		// Set minimum size for bursting
+		minSizeBursting = options.getBurstingSize();
 
-		// Set the boundary conditions (= 1: free surface; = 0: mirror or periodic)
+		// Set the bursting factor
+		burstingFactor = options.getBurstingFactor();
+
+		// Set the HeV ratio
+		heVRatio = options.getHeVRatio();
+
+		// Look at if the user wants to use a regular grid in the x direction
+		if (options.useRegularXGrid())
+			useRegularGrid = "regular";
+		else if (options.getMaterial() == "Fuel")
+			useRegularGrid = "NE";
+		else
+			useRegularGrid = "PSI";
+
+		// Boundary conditions in the X direction
+		if (options.getMaterial() == "Fuel")
+			isMirror = false;
+
+		// Look at if the user wants to use a Chebyshev grid in the x direction
+		if (options.useChebyshevGrid())
+			useRegularGrid = "cheby";
+
+		// Look at if the user wants to read in the grid in the x direction
+		if (options.useReadInGrid()) {
+			readInGrid = true;
+			useRegularGrid = options.getGridFilename();
+		}
+
+		// Set the boundary conditions (= 1: free surface; = 0: mirror)
 		leftOffset = options.getLeftBoundary();
 		rightOffset = options.getRightBoundary();
 		bottomOffset = options.getBottomBoundary();
@@ -343,8 +602,10 @@ public:
 		// Should we be able to move the surface?
 		auto map = options.getProcesses();
 		movingSurface = map["movingSurface"];
-		// Should we be able to burst bubble?
+		// Should we be able to burst bubbles?
 		bubbleBursting = map["bursting"];
+		// Should we be able to attenuate the modified trap mutation?
+		useAttenuation = map["attenuation"];
 
 		// Some safeguards about what to use with what
 		if (leftOffset == 0
@@ -428,6 +689,173 @@ public:
 	}
 
 	/**
+	 * Get the bursting minimum size parameter.
+	 * \see ISolverHandler.h
+	 */
+	int getMinSizeBursting() const override {
+		return minSizeBursting;
+	}
+
+	/**
+	 * Get the bursting factor.
+	 * \see ISolverHandler.h
+	 */
+	double getBurstingFactor() const override {
+		return burstingFactor;
+	}
+
+	/**
+	 * Get the HeV ratio.
+	 * \see ISolverHandler.h
+	 */
+	double getHeVRatio() const override {
+		return heVRatio;
+	}
+
+	/**
+	 * Create the local Xe rate vector.
+	 * \see ISolverHandler.h
+	 */
+	void createLocalNE(int a, int b = 1, int c = 1) override {
+		localNE.clear();
+		// Create the vector of vectors and fill it with 0.0
+		for (int i = 0; i < a; i++) {
+			std::vector<std::vector<std::tuple<double, double, double, double> > > tempTempVector;
+			for (int j = 0; j < b; j++) {
+				std::vector<std::tuple<double, double, double, double> > tempVector;
+				for (int k = 0; k < c; k++) {
+					tempVector.push_back(std::make_tuple(0.0, 0.0, 0.0, 0.0));
+				}
+				tempTempVector.push_back(tempVector);
+			}
+			localNE.push_back(tempTempVector);
+		}
+	}
+
+	/**
+	 * Set the latest value of the local Xe rate.
+	 * \see ISolverHandler.h
+	 */
+	void setLocalXeRate(double rate, int i, int j = 0, int k = 0) override {
+		std::get<0>(localNE[i][j][k]) += rate;
+	}
+
+	/**
+	 * Set the whole vector of local Xe rate.
+	 * \see ISolverHandler.h
+	 */
+	void setLocalNE(
+			std::vector<
+					std::vector<
+							std::vector<
+									std::tuple<double, double, double, double> > > > rateVector)
+					override {
+		localNE = rateVector;
+	}
+
+	/**
+	 * Get the local Xe rate vector that needs to be passed.
+	 * \see ISolverHandler.h
+	 */
+	std::vector<
+			std::vector<std::vector<std::tuple<double, double, double, double> > > > & getLocalNE()
+			override {
+		return localNE;
+	}
+
+	/**
+	 * Set the latest value of the Xe flux.
+	 * \see ISolverHandler.h
+	 */
+	void setPreviousXeFlux(double flux, int i, int j = 0, int k = 0) override {
+		std::get<1>(localNE[i][j][k]) = flux;
+	}
+
+	/**
+	 * Set the latest value of the Xe monomer concentration.
+	 * \see ISolverHandler.h
+	 */
+	void setMonomerConc(double conc, int i, int j = 0, int k = 0) override {
+		std::get<2>(localNE[i][j][k]) = conc;
+	}
+
+	/**
+	 * Set the latest value of the volume fraction.
+	 * \see ISolverHandler.h
+	 */
+	void setVolumeFraction(double frac, int i, int j = 0, int k = 0) override {
+		std::get<3>(localNE[i][j][k]) = frac;
+	}
+
+	/**
+	 * Set the coordinates covered by the local grid.
+	 * \see ISolverHandler.h
+	 */
+	void setLocalCoordinates(int xs, int xm, int ys = 0, int ym = 0, int zs = 0,
+			int zm = 0) override {
+		localXS = xs;
+		localXM = xm;
+		localYS = ys;
+		localYM = ym;
+		localZS = zs;
+		localZM = zm;
+
+		// Check for free surface boundaries
+
+		// Read the parameter file
+		std::ifstream paramFile;
+		paramFile.open(gbFileName);
+		if (paramFile.good()) {
+			// Build an input stream from the string
+			xolotlCore::TokenizedLineReader<int> reader;
+			// Get the line
+			std::string line;
+			getline(paramFile, line);
+			auto lineSS = std::make_shared<std::istringstream>(line);
+			reader.setInputStream(lineSS);
+
+			// Read the first line
+			auto tokens = reader.loadLine();
+			// And start looping on the lines
+			while (tokens.size() > 0) {
+				// Add the coordinates to the GB vector
+				setGBLocation(tokens[0], tokens[1], tokens[2]);
+
+				// Read the next line
+				getline(paramFile, line);
+				lineSS = std::make_shared<std::istringstream>(line);
+				reader.setInputStream(lineSS);
+				tokens = reader.loadLine();
+			}
+		}
+	}
+
+	/**
+	 * Get the coordinates covered by the local grid.
+	 * \see ISolverHandler.h
+	 */
+	void getLocalCoordinates(int &xs, int &xm, int &Mx, int &ys, int &ym,
+			int &My, int &zs, int &zm, int &Mz) override {
+		xs = localXS;
+		xm = localXM;
+		Mx = nX;
+		ys = localYS;
+		ym = localYM;
+		My = nY;
+		zs = localZS;
+		zm = localZM;
+		Mz = nZ;
+	}
+
+	/**
+	 * Get the grid left offset.
+	 * \see ISolverHandler.h
+	 */
+	int getLeftOffset() const override {
+		return leftOffset;
+	}
+
+	/**
 	 * Get the grid right offset.
 	 * \see ISolverHandler.h
 	 */
@@ -452,6 +880,48 @@ public:
 	}
 
 	/**
+	 * Get the previous time.
+	 * \see ISolverHandler.h
+	 */
+	double getPreviousTime() override {
+		return previousTime;
+	}
+
+	/**
+	 * Set the previous time.
+	 * \see ISolverHandler.h
+	 */
+	void setPreviousTime(double time, bool updateFluence = false) override {
+		previousTime = time;
+		if (updateFluence)
+			fluxHandler->computeFluence(time);
+	}
+
+	/**
+	 * Get the number of Xe that went to the GB.
+	 * \see ISolverHandler.h
+	 */
+	double getNXeGB() override {
+		return nXeGB;
+	}
+
+	/**
+	 * Set the number of Xe that went to the GB.
+	 * \see ISolverHandler.h
+	 */
+	void setNXeGB(double nXe) override {
+		nXeGB = nXe;
+	}
+
+	/**
+	 * Get the minimum size for computing average radius.
+	 * \see ISolverHandler.h
+	 */
+	xolotlCore::Array<int, 4> getMinSizes() const override {
+		return minRadiusSizes;
+	}
+
+	/**
 	 * Get the flux handler.
 	 * \see ISolverHandler.h
 	 */
@@ -465,6 +935,14 @@ public:
 	 */
 	xolotlCore::ITemperatureHandler *getTemperatureHandler() const override {
 		return temperatureHandler;
+	}
+
+	/**
+	 * Get the diffusion handler.
+	 * \see ISolverHandler.h
+	 */
+	xolotlCore::IDiffusionHandler *getDiffusionHandler() const override {
+		return diffusionHandler;
 	}
 
 	/**
@@ -493,6 +971,23 @@ public:
 	}
 
 	/**
+	 * Get the re-solution handler.
+	 * \see ISolverHandler.h
+	 */
+	xolotlCore::IReSolutionHandler *getReSolutionHandler() const override {
+		return resolutionHandler;
+	}
+
+	/**
+	 * Get the heterogeneous nucleation handler.
+	 * \see ISolverHandler.h
+	 */
+	xolotlCore::IHeterogeneousNucleationHandler *getHeterogeneousNucleationHandler() const
+			override {
+		return nucleationHandler;
+	}
+
+	/**
 	 * Get the network.
 	 * \see ISolverHandler.h
 	 */
@@ -516,6 +1011,94 @@ public:
 	 */
 	RandomNumberGenerator<int, unsigned int>& getRNG(void) const override {
 		return *rng;
+	}
+
+	/**
+	 * Set the file name containing the location of GB.
+	 *
+	 * @param name The filename
+	 */
+	void setGBFileName(std::string name) override {
+		gbFileName = name;
+	}
+
+	/**
+	 * Get the vector containing the location of GB.
+	 *
+	 * @return The GB vector
+	 */
+	std::vector<std::tuple<int, int, int> > getGBVector() const override {
+		return gbVector;
+	}
+
+	/**
+	 * Set the location of one GB grid point.
+	 *
+	 * @param i, j, k The coordinate of the GB
+	 */
+	void setGBLocation(int i, int j = 0, int k = 0) override {
+		// Add the coordinates to the GB vector
+		if (i >= localXS && i < localXS + max(localXM, 1) && j >= localYS
+				&& j < localYS + max(localYM, 1) && k >= localZS
+				&& k < localZS + max(localZM, 1)) {
+			gbVector.push_back(std::make_tuple(i, j, k));
+		}
+	}
+
+	/**
+	 * Reset the GB vector.
+	 */
+	void resetGBVector() override {
+		gbVector.clear();
+	}
+
+        /** 
+         * Get the coordinates covered by the local grid using copying method.
+         * \see ISolverHandler.h
+         */
+        void getLocalCoordinatesCpy(int *xs, int *xm, int *Mx, int *ys, int *ym,
+                        int *My, int *zs, int *zm, int *Mz) override {
+                *xs = localXS;
+                *xm = localXM;
+                *Mx = nX; 
+                *ys = localYS;
+                *ym = localYM;
+                *My = nY; 
+                *zs = localZS;
+                *zm = localZM;
+                *Mz = nZ; 
+        }
+
+	/**
+	 * Passing the XeRate at i,j,k point.
+	 * \see ISolverHandler.h
+	 */
+        double getXeRatePoint(int i, int j, int k) override {
+		return get<0>(localNE[i][j][k]);
+	}
+
+	/**
+	 * Passing the XeFlux at i,j,k point.
+	 * \see ISolverHandler.h
+	 */
+        double getXeFluxPoint(int i, int j, int k) override {
+		return get<1>(localNE[i][j][k]);
+	}
+
+	/**
+	 * Passing the XeConc at i,j,k point.
+	 * \see ISolverHandler.h
+	 */
+        double getXeConcPoint(int i, int j, int k) override {
+		return get<2>(localNE[i][j][k]);
+	}
+
+	/**
+	 * Passing the XeVolFrac at i,j,k point.
+	 * \see ISolverHandler.h
+	 */
+        double getXeVolFracPoint(int i, int j, int k) override {
+		return get<3>(localNE[i][j][k]);
 	}
 }
 ;

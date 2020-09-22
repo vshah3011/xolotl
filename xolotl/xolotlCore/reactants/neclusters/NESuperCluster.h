@@ -119,9 +119,6 @@ private:
 	//! The total number of clusters gathered in this super cluster.
 	int nTot;
 
-	//! The width in the xenon direction.
-	int sectionWidth;
-
 	//! The 0th order moment (mean).
 	double l0;
 
@@ -130,18 +127,6 @@ private:
 
 	//! The dispersion in the group in the xenon direction.
 	double dispersion;
-
-	//! The map containing all the reacting pairs separated by original composition.
-	std::map<int, std::vector<ClusterPair> > reactingMap;
-
-	//! The map containing all the combining clusters separated by original composition.
-	std::map<int, std::vector<CombiningCluster> > combiningMap;
-
-	//! The map containing all the dissociating pairs separated by original composition.
-	std::map<int, std::vector<ClusterPair> > dissociatingMap;
-
-	//! The map containing all the emission pairs separated by original composition.
-	std::map<int, std::vector<ClusterPair> > emissionMap;
 
 	//! The list of optimized effective reacting pairs.
 	std::forward_list<SuperClusterProductionPair> effReactingList;
@@ -162,9 +147,6 @@ private:
 
 public:
 
-	//! The vector of Xe clusters it will replace
-	std::vector<NECluster *> xeVector;
-
 	/**
 	 * Default constructor, deleted because we require info to construct.
 	 */
@@ -174,16 +156,12 @@ public:
 	 * The constructor. All NESuperClusters must be initialized with its
 	 * composition.
 	 *
-	 * @param numXe The mean number of xenon atoms in this cluster
+	 * @param numMax The max size of xenon atoms in this cluster
 	 * @param nTot The total number of clusters in this cluster
-	 * @param width The width of this super cluster in the xenon direction
-	 * @param radius The mean radius
-	 * @param energy The formation energy
 	 * @param _network The network this cluster will belong to.
 	 * @param registry The performance handler registry
 	 */
-	NESuperCluster(double numXe, int nTot, int width, double radius,
-			double energy, IReactionNetwork& _network,
+	NESuperCluster(int numMax, int nTot, IReactionNetwork& _network,
 			std::shared_ptr<xolotlPerf::IHandlerRegistry> registry);
 
 	/**
@@ -196,14 +174,12 @@ public:
 	}
 
 	/**
-	 * Update reactant using other reactants in its network.
+	 * Note that we result from the given reaction.
+	 * Assumes the reaction is already in our network.
+	 *
+	 * \see Reactant.h
 	 */
-	void updateFromNetwork() override;
-
-	/**
-	 * Group the same reactions together and add the reactions to the network lists.
-	 */
-	void optimizeReactions() override;
+	void resultFrom(ProductionReaction& reaction, IReactant& product) override;
 
 	/**
 	 * Note that we result from the given reaction.
@@ -219,7 +195,25 @@ public:
 	 *
 	 * \see Reactant.h
 	 */
+	void participateIn(ProductionReaction& reaction, IReactant& product)
+			override;
+
+	/**
+	 * Note that we combine with another cluster in a production reaction.
+	 * Assumes that the reaction is already in our network.
+	 *
+	 * \see Reactant.h
+	 */
 	void participateIn(ProductionReaction& reaction, double *coef) override;
+
+	/**
+	 * Note that we combine with another cluster in a dissociation reaction.
+	 * Assumes the reaction is already inour network.
+	 *
+	 * \see Reactant.h
+	 */
+	void participateIn(DissociationReaction& reaction, IReactant& disso)
+			override;
 
 	/**
 	 * Note that we combine with another cluster in a dissociation reaction.
@@ -228,6 +222,14 @@ public:
 	 * \see Reactant.h
 	 */
 	void participateIn(DissociationReaction& reaction, double *coef) override;
+
+	/**
+	 * Note that we emit from the given reaction.
+	 * Assumes the reaction is already in our network.
+	 *
+	 * \see Reactant.h
+	 */
+	void emitFrom(DissociationReaction& reaction, IReactant& disso) override;
 
 	/**
 	 * Note that we emit from the given reaction.
@@ -265,13 +267,6 @@ public:
 	}
 
 	/**
-	 * Set the Xe vector
-	 */
-	void setXeVector(std::vector<NECluster *> vec) {
-		xeVector = vec;
-	}
-
-	/**
 	 * This operation returns the current concentration.
 	 *
 	 * @param distXe The xenon distance in the group
@@ -297,10 +292,11 @@ public:
 
 	/**
 	 * This operation returns the current total concentration of xenon in the group.
-
+	 *
+	 * @param minSize The minimum size to take into account
 	 * @return The concentration
 	 */
-	double getTotalXenonConcentration() const;
+	double getTotalXenonConcentration(int minSize = 0) const;
 
 	/**
 	 * This operation returns the distance to the mean.
@@ -308,12 +304,7 @@ public:
 	 * @param xe The number of xenon
 	 * @return The distance to the mean number of xenon in the group
 	 */
-	double getDistance(int xe) const;
-
-	/**
-	 * Calculate the dispersion of the group.
-	 */
-	void computeDispersion();
+	double getDistance(int xe) const override;
 
 	/**
 	 * Get the dispersion of the group.
@@ -347,6 +338,41 @@ public:
 	void resetConnectivities() override;
 
 	/**
+	 * Add grid points to the vector of diffusion coefficients or remove
+	 * them if the value is negative.
+	 *
+	 * @param i The number of grid point to add or remove
+	 */
+	void addGridPoints(int i) override {
+		// Don't do anything
+		return;
+	}
+
+	/**
+	 * This operation sets the temperature at which the reactant currently
+	 * exists. Temperature-dependent quantities are recomputed when this
+	 * operation is called, so the temperature should always be set first.
+	 *
+	 * @param temp The new cluster temperature
+	 * @param i The location on the grid
+	 */
+	void setTemperature(double temp, int i) override{
+		// Don't do anything
+		return;
+	}
+
+	/**
+	 * This operation returns the diffusion coefficient for this reactant and is
+	 * calculated from the diffusion factor.
+	 *
+	 * @param i The position on the grid
+	 * @return The diffusion coefficient
+	 */
+	double getDiffusionCoefficient(int i) const override {
+		return 0.0;
+	}
+
+	/**
 	 * This operation returns the total flux of this cluster in the
 	 * current network.
 	 *
@@ -364,7 +390,7 @@ public:
 	 * @param i The location on the grid in the depth direction
 	 * @return The flux due to dissociation of other clusters
 	 */
-	double getDissociationFlux(int i);
+	double getDissociationFlux(int i) override;
 
 	/**
 	 * This operation returns the total change in this cluster due its
@@ -374,7 +400,7 @@ public:
 	 * @param i The location on the grid in the depth direction
 	 * @return The flux due to its dissociation
 	 */
-	double getEmissionFlux(int i);
+	double getEmissionFlux(int i) override;
 
 	/**
 	 * This operation returns the total change in this cluster due to
@@ -384,7 +410,7 @@ public:
 	 * @param i The location on the grid in the depth direction
 	 * @return The flux due to this cluster being produced
 	 */
-	double getProductionFlux(int i);
+	double getProductionFlux(int i) override;
 
 	/**
 	 * This operation returns the total change in this cluster due to
@@ -394,7 +420,7 @@ public:
 	 * @param i The location on the grid in the depth direction
 	 * @return The flux due to this cluster combining with other clusters
 	 */
-	double getCombinationFlux(int i);
+	double getCombinationFlux(int i) override;
 
 	/**
 	 * This operation returns the total change for its moment.
@@ -518,19 +544,19 @@ public:
 	 *
 	 * @return The width of the section
 	 */
-	int getSectionWidth() const {
-		return sectionWidth;
+	int getSectionWidth() const override {
+		return nTot;
 	}
 
 	/**
 	 * Detect if given coordinates are in this cluster's group.
 	 *
-	 * @param _nXe number of Xe of interest.
+	 * @param nXe number of Xe of interest.
 	 * @return True if the coordinates are contained in our super cluster.
 	 */
 	bool isIn(IReactant::SizeType nXe) const {
-		return (nXe > numXe - (double) sectionWidth / 2.0
-				&& nXe < numXe + (double) sectionWidth / 2.0);
+		return (nXe > numXe - (double) nTot / 2.0
+				&& nXe < numXe + (double) nTot / 2.0);
 	}
 
 };

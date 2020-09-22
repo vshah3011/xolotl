@@ -20,7 +20,7 @@ protected:
 	 * Vector to hold the incident flux values at each grid
 	 * point (x position).
 	 */
-	std::vector<double> incidentFluxVec;
+	std::vector<std::vector<double> > incidentFluxVec;
 
 	/**
 	 * Vector to hold the position at each grid
@@ -128,6 +128,12 @@ public:
 	virtual void incrementFluence(double dt);
 
 	/**
+	 * This operation computes the fluence at the given time.
+	 * \see IFluxHandler.h
+	 */
+	virtual void computeFluence(double time);
+
+	/**
 	 * This operation returns the fluence.
 	 * \see IFluxHandler.h
 	 */
@@ -150,6 +156,22 @@ public:
 	 * \see IFluxHandler.h
 	 */
 	virtual double getFluxRate() const;
+
+	/**
+	 * This operation sets the time of the pulse.
+	 * \see IFluxHandler.h
+	 */
+	virtual void setPulseTime(double time) {
+		return;
+	}
+
+	/**
+	 * This operation sets proportion of the pulse that is on.
+	 * \see IFluxHandler.h
+	 */
+	virtual void setProportion(double a) {
+		return;
+	}
 
 };
 //end class FluxHandler

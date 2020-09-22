@@ -2,7 +2,6 @@
 #define IRESOLUTIONHANDLER_H
 
 // Includes
-#include <NECluster.h>
 #include <IReactionNetwork.h>
 #include <memory>
 
@@ -28,8 +27,10 @@ public:
 	 * It must also initialize the rates of the reactions.
 	 *
 	 * @param network The network
+	 * @param electronicStoppingPower To select which fit to use
 	 */
-	virtual void initialize(const IReactionNetwork& network) = 0;
+	virtual void initialize(const IReactionNetwork& network,
+			double electronicStoppingPower) = 0;
 
 	/**
 	 * This method update the rate for the re-solution if the fission rate
@@ -38,6 +39,13 @@ public:
 	 * @param rate The fission rate
 	 */
 	virtual void updateReSolutionRate(double rate) = 0;
+
+	/**
+	 * This method updates the fission yield.
+	 *
+	 * @param yield The fission yield
+	 */
+	virtual void setFissionYield(double yield) = 0;
 
 	/**
 	 * Compute the flux due to the re-solution for all the cluster,
@@ -88,6 +96,20 @@ public:
 	 * @return The number of clusters
 	 */
 	virtual int getNumberOfReSoluting() const = 0;
+
+	/**
+	 * Set the minimum size for a cluster to undergo re-solution.
+	 *
+	 * @param size The minimum size
+	 */
+	virtual void setMinSize(int size) = 0;
+
+	/**
+	 * Get the minimum size for a cluster to undergo re-solution.
+	 *
+	 * @return The minimum size
+	 */
+	virtual int getMinSize() const = 0;
 
 };
 //end class IReSolutionHandler

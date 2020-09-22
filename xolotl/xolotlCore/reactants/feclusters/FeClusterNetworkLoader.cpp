@@ -11,6 +11,7 @@
 #include <FeClusterReactionNetwork.h>
 #include <xolotlPerf.h>
 #include <MathUtils.h>
+#include <MPIUtils.h>
 #include <cassert>
 #include "xolotlCore/io/XFile.h"
 
@@ -46,7 +47,7 @@ std::unique_ptr<FeCluster> FeClusterNetworkLoader::createFeCluster(int numHe,
 }
 
 std::unique_ptr<FeCluster> FeClusterNetworkLoader::createFeSuperCluster(
-		Array1D<int, 4> &bounds, IReactionNetwork& network) const {
+		Array<int, 4> &bounds, IReactionNetwork& network) const {
 	// Compute the values to create the cluster from the bounds
 	int count = (bounds[1] - bounds[0]) * (bounds[3] - bounds[2]);
 	double heSize = (bounds[0] + bounds[1] - 1) / 2.0, vSize = (bounds[2]
@@ -123,6 +124,18 @@ std::unique_ptr<IReactionNetwork> FeClusterNetworkLoader::load(
 	std::unique_ptr<FeClusterReactionNetwork> network(
 			new FeClusterReactionNetwork(handlerRegistry));
 
+	// Set the lattice parameter in the network
+	double latticeParam = options.getLatticeParameter();
+	if (!(latticeParam > 0.0))
+		latticeParam = ironLatticeConstant;
+	network->setLatticeParameter(latticeParam);
+
+	// Set the helium radius in the network
+	double radius = options.getImpurityRadius();
+	if (!(radius > 0.0))
+		radius = heliumRadius;
+	network->setImpurityRadius(radius);
+
 	// Loop on the clusters
 	for (int i = 0; i < normalSize + superSize; i++) {
 		// Open the cluster group
@@ -192,13 +205,23 @@ std::unique_ptr<IReactionNetwork> FeClusterNetworkLoader::generate(
 	maxI = options.getMaxI(), maxHe = options.getMaxImpurity(), maxV =
 			options.getMaxV();
 	int numHe = 0, numV = 0, numI = 0;
-	double formationEnergy = 0.0, migrationEnergy = 0.0;
-	double diffusionFactor = 0.0;
 
 	// Once we have C++14, use std::make_unique.
 	std::unique_ptr<FeClusterReactionNetwork> network(
 			new FeClusterReactionNetwork(handlerRegistry));
 	std::vector<std::reference_wrapper<Reactant> > reactants;
+
+	// Set the lattice parameter in the network
+	double latticeParam = options.getLatticeParameter();
+	if (!(latticeParam > 0.0))
+		latticeParam = ironLatticeConstant;
+	network->setLatticeParameter(latticeParam);
+
+	// Set the helium radius in the network
+	double radius = options.getImpurityRadius();
+	if (!(radius > 0.0))
+		radius = heliumRadius;
+	network->setImpurityRadius(radius);
 
 	// I formation energies in eV
 	std::vector<double> iFormationEnergies = { 0.0 };
@@ -351,7 +374,8 @@ std::unique_ptr<IReactionNetwork> FeClusterNetworkLoader::generate(
 
 //	// Dump the network we've created, if desired.
 //	int rank;
-//	MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+//	auto xolotlComm = xolotlCore::MPIUtils::getMPIComm();
+//	MPI_Comm_rank(xolotlComm, &rank);
 //	if (rank == 0) {
 //		// Dump the network we've created for comparison with baseline.
 //		std::ofstream networkStream(netDebugOpts.second);
