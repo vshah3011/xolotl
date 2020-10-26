@@ -1,12 +1,12 @@
-#ifndef IOPTIONS_H
-#define IOPTIONS_H
+#pragma once
 
 // Includes
-#include <iostream>
+#include <array>
 #include <map>
 #include <string>
+#include <tuple>
+#include <vector>
 
-#include <xolotl/perf/xolotlPerf.h>
 #include <xolotl/util/Array.h>
 #include <xolotl/util/Filesystem.h>
 
@@ -94,28 +94,18 @@ public:
 	getPetscArg() const = 0;
 
 	/**
-	 * Should we use const temperature handlers?
+	 * Obtain the name of the temperature handler to be used
 	 *
-	 * @return true if Xolotl must use a constant temperature
+	 * @return The name of the temperature handler
 	 */
-	virtual bool
-	useConstTemperatureHandlers() const = 0;
+	virtual std::string
+	getTempHandlerName() const = 0;
 
 	/**
-	 * Obtain the value of the constant temperature to be used.
-	 *
-	 * @return The value for the temperature
+	 * Obtain the temperature parameters for the temperature handler
 	 */
 	virtual double
-	getConstTemperature() const = 0;
-
-	/**
-	 * Should we use temperature profile handlers?
-	 *
-	 * @return true if Xolotl must use a temperature profile
-	 */
-	virtual bool
-	useTemperatureProfileHandlers() const = 0;
+	getTempParam(std::size_t i = 0) const = 0;
 
 	/**
 	 * Obtain the name of the file containing the temperature profile data.
@@ -124,22 +114,6 @@ public:
 	 */
 	virtual std::string
 	getTempProfileFilename() const = 0;
-
-	/**
-	 * Should we use heat equation handlers?
-	 *
-	 * @return true if Xolotl must use the heat equation
-	 */
-	virtual bool
-	useHeatEquationHandlers() const = 0;
-
-	/**
-	 * Obtain the value of the temperature to be used in the bulk.
-	 *
-	 * @return The value for the temperature
-	 */
-	virtual double
-	getBulkTemperature() const = 0;
 
 	/**
 	 * Should we use the flux amplitude option?
@@ -177,22 +151,20 @@ public:
 	getFluxTimeProfileFilePath() const = 0;
 
 	/**
-	 * Which type of performance handlers should we use?
+	 * Obtain the name of the perfomance handler to be used
 	 *
-	 * @return The type of performance handler registry to use
+	 * @return The name of the perf handler
 	 */
-	virtual perf::IHandlerRegistry::RegistryType
-	getPerfHandlerType(void) const = 0;
+	virtual std::string
+	getPerfHandlerName() const = 0;
 
 	/**
-	 * Should we use the "standard" set of handlers for the visualization?
-	 * If false, use dummy (stub) handlers.
+	 * Obtain the name of the visualization handler to be used
 	 *
-	 * @return true if program should use standard handlers, false if
-	 * should use dummy handlers
+	 * @return The name of the viz handler
 	 */
-	virtual bool
-	useVizStandardHandlers() const = 0;
+	virtual std::string
+	getVizHandlerName() const = 0;
 
 	/**
 	 * Obtain the name of the material to be used for the simulation.
@@ -322,14 +294,6 @@ public:
 	useHDF5() const = 0;
 
 	/**
-	 * To know if we should use the phase cut.
-	 *
-	 * @return usePhaseCutFlag
-	 */
-	virtual bool
-	usePhaseCut() const = 0;
-
-	/**
 	 * Obtain the maximum value of impurities (He or Xe) to be used.
 	 *
 	 * @return The maximum value
@@ -444,14 +408,6 @@ public:
 	getBurstingDepth() const = 0;
 
 	/**
-	 * Obtain the value of the minimum size at which the bursting is happening.
-	 *
-	 * @return The size
-	 */
-	virtual int
-	getBurstingSize() const = 0;
-
-	/**
 	 * Obtain the value of the factor in the bursting probability.
 	 *
 	 * @return The factor
@@ -487,14 +443,6 @@ public:
 	 */
 	virtual bool
 	printRNGSeed(void) const = 0;
-
-	/**
-	 * Obtain the minimum size for the re-solution.
-	 *
-	 * @return The size
-	 */
-	virtual int
-	getResoMinSize() const = 0;
 
 	/**
 	 * Obtain the minimum size for the average radius computation.
@@ -602,8 +550,5 @@ public:
 	getFluxDepthProfileFilePath() const = 0;
 };
 // end class IOptions
-
 } /* namespace options */
 } /* namespace xolotl */
-
-#endif

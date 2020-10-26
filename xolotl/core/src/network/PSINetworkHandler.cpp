@@ -25,7 +25,7 @@ makePSIReactionNetwork(
 }
 
 std::shared_ptr<IPSIReactionNetwork>
-generatePSIReactionNetwork(const options::Options& options)
+generatePSIReactionNetwork(const options::IOptions& options)
 {
 	using AmountType = IReactionNetwork::AmountType;
 
@@ -58,63 +58,59 @@ generatePSIReactionNetwork(const options::Options& options)
 	}
 	// Take care of the case with no grouping
 	if (options.getGroupingMin() > maxV) {
-		groupingWidthHe = 1;
-		groupingWidthD = 1;
-		groupingWidthT = 1;
-		groupingWidthV = 1;
+		groupingWidthHe = maxHe + 1;
+		groupingWidthD = maxD + 1;
+		groupingWidthT = maxT + 1;
+		groupingWidthV = maxV + 1;
 	}
-	AmountType refineHe = (maxHe + 1) / groupingWidthHe;
-	AmountType refineD = (maxD + 1) / groupingWidthD;
-	AmountType refineT = (maxT + 1) / groupingWidthT;
-	AmountType refineV = (maxV + 1) / groupingWidthV;
-	AmountType refineI = (maxI + 1);
-
-	if (maxHe + 1 != groupingWidthHe * refineHe) {
-		maxHe = groupingWidthHe * (refineHe + 1) - 1;
-		refineHe++;
-	}
-	if (maxD > 0) {
-		if (maxD + 1 != groupingWidthD * refineD) {
-			maxD = groupingWidthD * (refineD + 1) - 1;
-			refineD++;
+	else {
+		// Adapt max
+		int i = 0;
+		while (maxHe + 1 > pow(groupingWidthHe, i)) {
+			++i;
 		}
-	}
-	if (maxT > 0) {
-		if (maxT + 1 != groupingWidthT * refineT) {
-			maxT = groupingWidthT * (refineT + 1) - 1;
-			refineT++;
+		maxHe = pow(groupingWidthHe, i) - 1;
+		i = 0;
+		while (maxD + 1 > pow(groupingWidthD, i)) {
+			++i;
 		}
-	}
-	if (maxV + 1 != groupingWidthV * refineV) {
-		maxV = groupingWidthV * (refineV + 1) - 1;
-		refineV++;
+		maxD = pow(groupingWidthD, i) - 1;
+		i = 0;
+		while (maxT + 1 > pow(groupingWidthT, i)) {
+			++i;
+		}
+		maxT = pow(groupingWidthT, i) - 1;
+		i = 0;
+		while (maxV + 1 > pow(groupingWidthV, i)) {
+			++i;
+		}
+		maxV = pow(groupingWidthV, i) - 1;
 	}
 
 	if (maxD > 0 && maxT > 0) {
 		return makePSIReactionNetwork<PSIFullSpeciesList>(
 			{maxHe, maxD, maxT, maxV, maxI},
-			{{refineHe, refineD, refineT, refineV, refineI},
-				{groupingWidthHe, groupingWidthD, groupingWidthT,
-					groupingWidthV, 1}},
+			{{groupingWidthHe, groupingWidthD, groupingWidthT, groupingWidthV,
+				maxI + 1}},
 			options);
 	}
 	else if (maxD > 0 && maxT <= 0) {
 		return makePSIReactionNetwork<PSIDeuteriumSpeciesList>(
 			{maxHe, maxD, maxV, maxI},
-			{{refineHe, refineD, refineV, refineI},
-				{groupingWidthHe, groupingWidthD, groupingWidthV, 1}},
+			{{groupingWidthHe, groupingWidthD, groupingWidthV, maxI + 1}},
 			options);
 	}
 	else if (maxD <= 0 && maxT > 0) {
 		return makePSIReactionNetwork<PSITritiumSpeciesList>(
 			{maxHe, maxT, maxV, maxI},
-			{{refineHe, refineT, refineV, refineI},
-				{groupingWidthHe, groupingWidthT, groupingWidthV, 1}},
+			{{groupingWidthHe, groupingWidthT, groupingWidthV, maxI + 1}},
 			options);
 	}
 	else {
+		AmountType refineHe = (maxHe + 1) / groupingWidthHe;
+		AmountType refineV = (maxV + 1) / groupingWidthV;
 		return makePSIReactionNetwork<PSIHeliumSpeciesList>({maxHe, maxV, maxI},
-			{{refineHe, refineV, refineI},
+			{{refineHe, refineV, maxI + 1},
 				{groupingWidthHe, groupingWidthV, 1}},
 			options);
 	}
@@ -125,7 +121,7 @@ auto psiNetworkHandlerRegistrations =
 		PSINetworkHandler>({"W100", "W110", "W111", "W211", "Pulsed"});
 } // namespace detail
 
-PSINetworkHandler::PSINetworkHandler(const options::Options& options) :
+PSINetworkHandler::PSINetworkHandler(const options::IOptions& options) :
 	NetworkHandler(options, detail::generatePSIReactionNetwork)
 {
 }

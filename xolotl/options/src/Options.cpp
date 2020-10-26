@@ -18,17 +18,14 @@ Options::Options() :
 	exitCode(EXIT_SUCCESS),
 	petscArg(""),
 	networkFilename(""),
-	constTempFlag(false),
-	constTemperature(1000.0),
-	tempProfileFlag(false),
+	tempHandlerName(""),
+	tempParam{},
 	tempProfileFilename(""),
-	heatFlag(false),
-	bulkTemperature(0.0),
 	fluxFlag(false),
 	fluxAmplitude(0.0),
 	fluxTimeProfileFlag(false),
-	perfRegistryType(perf::IHandlerRegistry::std),
-	vizStandardHandlersFlag(false),
+	perfHandlerName(""),
+	vizHandlerName(""),
 	materialName(""),
 	initialVConcentration(0.0),
 	voidPortion(50.0),
@@ -43,7 +40,6 @@ Options::Options() :
 	groupingWidthB(0),
 	sputteringYield(0.0),
 	useHDF5Flag(true),
-	usePhaseCutFlag(false),
 	maxImpurity(8),
 	maxD(0),
 	maxT(0),
@@ -62,13 +58,11 @@ Options::Options() :
 	frontBoundary(1),
 	backBoundary(1),
 	burstingDepth(10.0),
-	burstingMinSize(0),
 	burstingFactor(0.1),
 	rngUseSeed(false),
 	rngSeed(0),
 	rngPrintSeed(false),
 	zeta(0.73),
-	resoMinSize(0),
 	density(10.162795276841),
 	pulseTime(0.0),
 	pulseProportion(0.0),
@@ -134,42 +128,38 @@ Options::readParams(int argc, char* argv[])
 	bpo::options_description config("Parameters");
 	config.add_options()("networkFile",
 		bpo::value<std::string>(&networkFilename),
-		"The network will be loaded from this HDF5 file.")("startTemp",
+		"The network will be loaded from this HDF5 file.")("tempHandler",
+		bpo::value<std::string>(&tempHandlerName)->default_value("constant"),
+		"Temperature handler to use. (default = constant; available "
+		"constant,gradient,heat,profile")("tempParam",
 		bpo::value<std::string>(),
-		"The temperature (in Kelvin) will be the constant floating point value "
-		"specified. "
-		"(default = 1000). If two values are given, the second one is "
-		"interpreted "
-		"as the bulk temperature and a gradient will be used. (NOTE: Use only "
-		"ONE temperature option)")("tempFile",
+		"At most two parameters for temperature handler. Alternatives:"
+		"constant -> temp; "
+		"gradient -> surfaceTemp bulkTemp; "
+		"heat -> heatFlux bulkTemp")("tempFile",
 		bpo::value<std::string>(&tempProfileFilename),
 		"A temperature profile is given by the specified file, "
 		"then linear interpolation is used to fit the data."
-		"(NOTE: If a temperature file is given, "
-		"a constant temperature should NOT be given)")("heat",
-		bpo::value<std::string>(),
-		"The heat flux (in W nm-2) at the surface and the temperature in the "
-		"bulk (Kelvin).")("flux", bpo::value<double>(&fluxAmplitude),
+		" NOTE: no need for tempParam here.")("flux",
+		bpo::value<double>(&fluxAmplitude),
 		"The value of the incoming flux in #/nm2/s. If the Fuel case is used "
-		"it actually "
-		"corresponds to the fission rate in #/nm3/s.")("fluxFile",
+		"it actually corresponds to the fission rate in #/nm3/s.")("fluxFile",
 		bpo::value<std::string>(&fluxTimeProfileFilePath),
 		"A time profile for the flux is given by the specified file, "
 		"then linear interpolation is used to fit the data."
 		"(NOTE: If a flux profile file is given, "
 		"a constant flux should NOT be given)")("perfHandler",
-		bpo::value<std::string>()->default_value("std"),
-		"Which set of performance handlers to use. (default = std, available "
-		"std,dummy,os,papi).")("vizHandler",
-		bpo::value<std::string>()->default_value("dummy"),
+		bpo::value<std::string>(&perfHandlerName)->default_value("os"),
+		"Which set of performance handlers to use. (default = os, available "
+		"dummy,os,papi).")("vizHandler",
+		bpo::value<std::string>(&vizHandlerName)->default_value("dummy"),
 		"Which set of handlers to use for the visualization. (default = dummy, "
 		"available std,dummy).")("dimensions",
 		bpo::value<int>(&dimensionNumber),
 		"Number of dimensions for the simulation.")("material",
 		bpo::value<std::string>(&materialName),
 		"The material options are as follows: {W100, W110, W111, "
-		"W211, Fuel, TRIDYN, Fe, 800H}, where W is for tungsten and "
-		"the numbers correspond to the surface orientation.")("initialV",
+		"W211, Pulsed, Fuel, Fe, 800H}.")("initialV",
 		bpo::value<double>(&initialVConcentration),
 		"The value of the initial concentration of vacancies in the material.")(
 		"zeta", bpo::value<double>(&zeta)->default_value(0.73),
@@ -196,8 +186,7 @@ Options::readParams(int argc, char* argv[])
 		"netParam", bpo::value<std::string>(),
 		"This option allows the user to define the boundaries of the network. "
 		"To do so, simply write the values in order "
-		"maxHe/Xe maxD maxT maxV maxI bool .")("grid",
-		bpo::value<std::string>(),
+		"maxHe/Xe maxD maxT maxV maxI.")("grid", bpo::value<std::string>(),
 		"This option allows the user to define the boundaries of the grid. "
 		"To do so, simply write the values in order "
 		"nX xStepSize nY yStepSize nZ zStepSize .")("radiusSize",
@@ -212,23 +201,20 @@ Options::readParams(int argc, char* argv[])
 		"0 means mirror or periodic, 1 means free surface.")("burstingDepth",
 		bpo::value<double>(&burstingDepth),
 		"This option allows the user to set a depth in nm "
-		"for the bubble bursting.")("burstingMin",
-		bpo::value<int>(&burstingMinSize),
-		"This option allows the user to set a minimum size for the bubble "
-		"bursting.")("burstingFactor", bpo::value<double>(&burstingFactor),
+		"for the bubble bursting.")("burstingFactor",
+		bpo::value<double>(&burstingFactor),
 		"This option allows the user to set the factor used in computing the "
 		"likelihood of a bursting event.")("rng", bpo::value<std::string>(),
 		"Allows user to specify seed used to initialize random number "
 		"generator (default = determined from current time) and "
 		"whether each process should print the seed value "
-		"it uses (default = don't print)")("resoSize",
-		bpo::value<int>(&resoMinSize)->default_value(0),
-		"This option allows the user a minimum size for the re-solution "
-		"(default is 0).")("density", bpo::value<double>(&density),
+		"it uses (default = don't print)")("density",
+		bpo::value<double>(&density),
 		"This option allows the user to set a density in nm-3 "
 		"for the number of xenon per volume in a bubble.")("pulse",
 		bpo::value<std::string>(),
-		"The total length of the pulse (in s) and the proportion of it that is "
+		"The total length of the pulse (in s) if the Pulsed material is used, "
+		"and the proportion of it that is "
 		"ON.")("lattice", bpo::value<double>(&latticeParameter),
 		"This option allows the user to set the length of the lattice side in "
 		"nm.")("impurityRadius", bpo::value<double>(&impurityRadius),
@@ -264,7 +250,7 @@ Options::readParams(int argc, char* argv[])
 	}
 
 	if (shouldRunFlag) {
-		std::ifstream ifs(param_file.c_str());
+		std::ifstream ifs(param_file);
 		if (!ifs) {
 			std::cerr << "Options: unable to open parameter file: "
 					  << param_file << std::endl;
@@ -275,31 +261,30 @@ Options::readParams(int argc, char* argv[])
 		notify(opts);
 
 		// Take care of the temperature
-		if (opts.count("startTemp")) {
+		if (opts.count("tempParam")) {
 			// Build an input stream from the argument string.
 			util::TokenizedLineReader<double> reader;
 			auto argSS = std::make_shared<std::istringstream>(
-				opts["startTemp"].as<std::string>());
+				opts["tempParam"].as<std::string>());
 			reader.setInputStream(argSS);
 
 			// Break the argument into tokens.
 			auto tokens = reader.loadLine();
-
-			// Set the flag to use constant temperature to true
-			constTempFlag = true;
-
-			// Set the temperature
-			constTemperature = tokens[0];
-
-			// Check if we have another value
-			if (tokens.size() > 1) {
-				// Set the temperature gradient
-				bulkTemperature = tokens[1];
+			if (tokens.size() > 2) {
+				std::cerr
+					<< "Options: too many temperature parameters (expect 2)"
+					<< std::endl;
+				exitCode = EXIT_FAILURE;
+				return;
+			}
+			for (std::size_t i = 0; i < tokens.size(); ++i) {
+				tempParam[i] = tokens[i];
 			}
 		}
+
 		if (opts.count("tempFile")) {
 			// Check that the profile file exists
-			std::ifstream inFile(tempProfileFilename.c_str());
+			std::ifstream inFile(tempProfileFilename);
 			if (!inFile) {
 				std::cerr << "\nOptions: could not open file containing "
 							 "temperature profile data. "
@@ -308,26 +293,6 @@ Options::readParams(int argc, char* argv[])
 				shouldRunFlag = false;
 				exitCode = EXIT_FAILURE;
 			}
-			else {
-				// Set the flag to use a temperature profile to true
-				tempProfileFlag = true;
-			}
-		}
-
-		// Take care of the heat
-		if (opts.count("heat")) {
-			// Build an input stream from the argument string.
-			util::TokenizedLineReader<double> reader;
-			auto argSS = std::make_shared<std::istringstream>(
-				opts["heat"].as<std::string>());
-			reader.setInputStream(argSS);
-
-			// Break the argument into tokens.
-			auto tokens = reader.loadLine();
-
-			heatFlag = true;
-			constTemperature = tokens[0];
-			bulkTemperature = tokens[1];
 		}
 
 		// Take care of the flux
@@ -353,14 +318,9 @@ Options::readParams(int argc, char* argv[])
 
 		// Take care of the performance handler
 		if (opts.count("perfHandler")) {
-			try {
-				// Determine the type of handlers we are being asked to use
-				perf::IHandlerRegistry::RegistryType rtype =
-					perf::toPerfRegistryType(
-						opts["perfHandler"].as<std::string>());
-				perfRegistryType = rtype;
-			}
-			catch (const std::invalid_argument& e) {
+			std::string perfHandlers[] = {"dummy", "std", "os", "papi"};
+			if (std::find(begin(perfHandlers), end(perfHandlers),
+					perfHandlerName) == end(perfHandlers)) {
 				std::cerr << "\nOptions: could not understand the performance "
 							 "handler type. "
 							 "Aborting!\n"
@@ -373,13 +333,7 @@ Options::readParams(int argc, char* argv[])
 		// Take care of the visualization handler
 		if (opts.count("vizHandler")) {
 			// Determine the type of handlers we are being asked to use
-			if (opts["vizHandler"].as<std::string>() == "std") {
-				vizStandardHandlersFlag = true;
-			}
-			else if (opts["vizHandler"].as<std::string>() == "dummy") {
-				vizStandardHandlersFlag = false;
-			}
-			else {
+			if (!(vizHandlerName == "std" || vizHandlerName == "dummy")) {
 				std::cerr << "\nOptions: unrecognized argument in the "
 							 "visualization option handler."
 							 "Aborting!\n"
@@ -514,12 +468,6 @@ Options::readParams(int argc, char* argv[])
 				maxV = strtol(tokens[3].c_str(), NULL, 10);
 				// Set the interstitial size
 				maxI = strtol(tokens[4].c_str(), NULL, 10);
-
-				// Check if there are other values
-				if (tokens.size() > 5) {
-					// Set the phase cut
-					usePhaseCutFlag = (tokens[5] == "true");
-				}
 			}
 		}
 

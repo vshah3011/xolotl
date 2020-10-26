@@ -117,7 +117,8 @@ BOOST_AUTO_TEST_CASE(goodParamFile)
 		   "-ts_max_steps 3"
 		<< std::endl
 		<< "networkFile=tungsten.txt" << std::endl
-		<< "startTemp=900" << std::endl
+		<< "tempHandler=constant" << std::endl
+		<< "tempParam=900" << std::endl
 		<< "perfHandler=std" << std::endl
 		<< "flux=1.5" << std::endl
 		<< "material=W100" << std::endl
@@ -129,12 +130,9 @@ BOOST_AUTO_TEST_CASE(goodParamFile)
 		<< "grouping=11 2 4" << std::endl
 		<< "sputtering=0.5" << std::endl
 		<< "boundary=1 1" << std::endl
-		<< std::endl
 		<< "burstingDepth=5.0" << std::endl
-		<< "burstingMin=3" << std::endl
 		<< "burstingFactor=2.5" << std::endl
 		<< "zeta=0.6" << std::endl
-		<< "resoSize=10" << std::endl
 		<< "radiusSize=5 0 3" << std::endl
 		<< "density=9.0" << std::endl
 		<< "lattice=0.1" << std::endl
@@ -171,20 +169,19 @@ BOOST_AUTO_TEST_CASE(goodParamFile)
 	BOOST_REQUIRE_EQUAL(opts.getNetworkFilename(), "tungsten.txt");
 
 	// Check the temperature
-	BOOST_REQUIRE_EQUAL(opts.useConstTemperatureHandlers(), true);
-	BOOST_REQUIRE_EQUAL(opts.getConstTemperature(), 900.0);
-	BOOST_REQUIRE_EQUAL(opts.getBulkTemperature(), 0.0);
+	BOOST_REQUIRE_EQUAL(opts.getTempHandlerName(), "constant");
+	BOOST_REQUIRE_EQUAL(opts.getTempParam(), 900.0);
+	BOOST_REQUIRE_EQUAL(opts.getTempParam(1), 0.0);
 
 	// Check if the flux option is used
 	BOOST_REQUIRE_EQUAL(opts.useFluxAmplitude(), true);
 	BOOST_REQUIRE_EQUAL(opts.getFluxAmplitude(), 1.5);
 
 	// Check the performance handler
-	BOOST_REQUIRE_EQUAL(
-		opts.getPerfHandlerType(), xolotl::perf::IHandlerRegistry::std);
+	BOOST_REQUIRE_EQUAL(opts.getPerfHandlerName(), "std");
 
 	// Check the performance handler
-	BOOST_REQUIRE_EQUAL(opts.useVizStandardHandlers(), true);
+	BOOST_REQUIRE_EQUAL(opts.getVizHandlerName(), "std");
 
 	// Check the material option
 	BOOST_REQUIRE_EQUAL(opts.getMaterial(), "W100");
@@ -212,9 +209,6 @@ BOOST_AUTO_TEST_CASE(goodParamFile)
 	// Check the bursting depth option
 	BOOST_REQUIRE_EQUAL(opts.getBurstingDepth(), 5.0);
 
-	// Check the bursting size option
-	BOOST_REQUIRE_EQUAL(opts.getBurstingSize(), 3);
-
 	// Check the bursting factor option
 	BOOST_REQUIRE_EQUAL(opts.getBurstingFactor(), 2.5);
 
@@ -228,9 +222,6 @@ BOOST_AUTO_TEST_CASE(goodParamFile)
 
 	// Check the electronic stopping power option
 	BOOST_REQUIRE_EQUAL(opts.getZeta(), 0.6);
-
-	// Check the minimum re-solution size option
-	BOOST_REQUIRE_EQUAL(opts.getResoMinSize(), 10);
 
 	// Check the minimum size option for the average radius computation
 	auto sizes = opts.getRadiusMinSizes();
@@ -332,7 +323,6 @@ BOOST_AUTO_TEST_CASE(goodParamFileNoHDF5)
 	BOOST_REQUIRE_EQUAL(opts.getMaxT(), 0);
 	BOOST_REQUIRE_EQUAL(opts.getMaxV(), 5);
 	BOOST_REQUIRE_EQUAL(opts.getMaxI(), 3);
-	BOOST_REQUIRE_EQUAL(opts.usePhaseCut(), false);
 
 	// Check the grid parameters
 	BOOST_REQUIRE_EQUAL(opts.getNX(), 100);
@@ -448,6 +438,7 @@ BOOST_AUTO_TEST_CASE(goodParamFileWithProfiles)
 	// Create a parameter file using these two profile files
 	std::ofstream paramFile("param_good_profiles.txt");
 	paramFile << "fluxFile=fluxFile.dat" << std::endl
+			  << "tempHandler=profile" << std::endl
 			  << "tempFile=temperatureFile.dat" << std::endl;
 	paramFile.close();
 
@@ -471,7 +462,7 @@ BOOST_AUTO_TEST_CASE(goodParamFileWithProfiles)
 	BOOST_REQUIRE_EQUAL(opts.getExitCode(), EXIT_SUCCESS);
 
 	// Check the temperature
-	BOOST_REQUIRE_EQUAL(opts.useTemperatureProfileHandlers(), true);
+	BOOST_REQUIRE_EQUAL(opts.getTempHandlerName(), "profile");
 	BOOST_REQUIRE_EQUAL(opts.getTempProfileFilename(), "temperatureFile.dat");
 
 	// Check if the heFlux option is used
@@ -622,8 +613,7 @@ BOOST_AUTO_TEST_CASE(papiPerfHandler)
 	BOOST_REQUIRE_EQUAL(opts.getExitCode(), EXIT_SUCCESS);
 
 	// Check the performance handler
-	BOOST_REQUIRE_EQUAL(
-		opts.getPerfHandlerType(), xolotl::perf::IHandlerRegistry::papi);
+	BOOST_REQUIRE_EQUAL(opts.getPerfHandlerName(), "papi");
 
 	// Remove the created file
 	std::string tempFile = "param_good_perf_papi.txt";
@@ -658,8 +648,7 @@ BOOST_AUTO_TEST_CASE(osPerfHandler)
 	BOOST_REQUIRE_EQUAL(opts.getExitCode(), EXIT_SUCCESS);
 
 	// Check the performance handler
-	BOOST_REQUIRE_EQUAL(
-		opts.getPerfHandlerType(), xolotl::perf::IHandlerRegistry::os);
+	BOOST_REQUIRE_EQUAL(opts.getPerfHandlerName(), "os");
 
 	// Remove the created file
 	std::string tempFile = "param_good_perf_os.txt";
@@ -694,8 +683,7 @@ BOOST_AUTO_TEST_CASE(dummyPerfHandler)
 	BOOST_REQUIRE_EQUAL(opts.getExitCode(), EXIT_SUCCESS);
 
 	// Check the performance handler
-	BOOST_REQUIRE_EQUAL(
-		opts.getPerfHandlerType(), xolotl::perf::IHandlerRegistry::dummy);
+	BOOST_REQUIRE_EQUAL(opts.getPerfHandlerName(), "dummy");
 
 	// Remove the created file
 	std::string tempFile = "param_good_perf_dummy.txt";

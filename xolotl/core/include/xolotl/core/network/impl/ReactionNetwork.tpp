@@ -4,6 +4,7 @@
 #include <xolotl/core/network/detail/ReactionGenerator.h>
 #include <xolotl/core/network/detail/impl/ReactionGenerator.tpp>
 #include <xolotl/core/network/impl/Reaction.tpp>
+#include <xolotl/options/Options.h>
 
 namespace xolotl
 {
@@ -171,6 +172,13 @@ ReactionNetwork<TImpl>::setEnableNucleation(bool reaction)
 	auto mirror = Kokkos::create_mirror_view(_clusterData.enableNucleation);
 	mirror(0) = this->_enableNucleation;
 	Kokkos::deep_copy(_clusterData.enableNucleation, mirror);
+}
+
+template <typename TImpl>
+void
+ReactionNetwork<TImpl>::setEnableReducedJacobian(bool reduced)
+{
+	this->_enableReducedJacobian = reduced;
 }
 
 template <typename TImpl>
@@ -372,10 +380,18 @@ ReactionNetwork<TImpl>::computeAllPartials(ConcentrationsView concentrations,
 		nValues, KOKKOS_LAMBDA(const IndexType i) { values(i) = 0.0; });
 
 	auto connectivity = _reactions.getConnectivity();
-	_reactions.apply(DEVICE_LAMBDA(auto&& reaction) {
-		reaction.contributePartialDerivatives(
-			concentrations, values, connectivity, gridIndex);
-	});
+	if (this->_enableReducedJacobian) {
+		_reactions.apply(DEVICE_LAMBDA(auto&& reaction) {
+			reaction.contributeReducedPartialDerivatives(
+				concentrations, values, connectivity, gridIndex);
+		});
+	}
+	else {
+		_reactions.apply(DEVICE_LAMBDA(auto&& reaction) {
+			reaction.contributePartialDerivatives(
+				concentrations, values, connectivity, gridIndex);
+		});
+	}
 
 	Kokkos::fence();
 }

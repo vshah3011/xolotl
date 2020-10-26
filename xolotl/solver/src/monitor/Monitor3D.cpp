@@ -13,7 +13,6 @@
 #include <xolotl/core/network/IPSIReactionNetwork.h>
 #include <xolotl/core/network/NEReactionNetwork.h>
 #include <xolotl/io/XFile.h>
-#include <xolotl/perf/xolotlPerf.h>
 #include <xolotl/solver/PetscSolver.h>
 #include <xolotl/solver/monitor/Monitor.h>
 #include <xolotl/util/MPIUtils.h>
@@ -1826,7 +1825,7 @@ setupPetsc3DMonitor(TS ts)
 				// Get the interstitial quantity from the HDF5 file
 				nInterstitial3D = lastTsGroup->readData3D("nInterstitial");
 				// Get the previous I flux from the HDF5 file
-				previousIFlux3D = lastTsGroup->readData3D("previousIFlux");
+				previousIFlux3D = lastTsGroup->readData3D("previousFluxI");
 				// Get the previous time from the HDF5 file
 				double previousTime = lastTsGroup->readPreviousTime();
 				solverHandler.setPreviousTime(previousTime);

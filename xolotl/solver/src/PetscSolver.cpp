@@ -198,7 +198,7 @@ RHSJacobian(TS ts, PetscReal ftime, Vec C, Mat A, Mat J, void*)
 	PetscFunctionReturn(0);
 }
 
-PetscSolver::PetscSolver(const options::Options& options) :
+PetscSolver::PetscSolver(const options::IOptions& options) :
 	Solver(options,
 		[&options](core::network::IReactionNetwork& network)
 			-> std::shared_ptr<handler::ISolverHandler> {
@@ -220,18 +220,18 @@ PetscSolver::PetscSolver(const options::Options& options) :
 {
 	this->setCommandLineOptions(options.getPetscArg());
 
-	RHSFunctionTimer = handlerRegistry->getTimer("RHSFunctionTimer");
-	RHSJacobianTimer = handlerRegistry->getTimer("RHSJacobianTimer");
-	SolveTimer = handlerRegistry->getTimer("SolveTimer");
+	RHSFunctionTimer = perfHandler->getTimer("RHSFunctionTimer");
+	RHSJacobianTimer = perfHandler->getTimer("RHSJacobianTimer");
+	SolveTimer = perfHandler->getTimer("SolveTimer");
 }
 
 PetscSolver::PetscSolver(handler::ISolverHandler& _solverHandler,
-	std::shared_ptr<perf::IHandlerRegistry> registry) :
-	Solver(_solverHandler, registry)
+	std::shared_ptr<perf::IPerfHandler> _perfHandler) :
+	Solver(_solverHandler, _perfHandler)
 {
-	RHSFunctionTimer = handlerRegistry->getTimer("RHSFunctionTimer");
-	RHSJacobianTimer = handlerRegistry->getTimer("RHSJacobianTimer");
-	SolveTimer = handlerRegistry->getTimer("SolveTimer");
+	RHSFunctionTimer = perfHandler->getTimer("RHSFunctionTimer");
+	RHSJacobianTimer = perfHandler->getTimer("RHSJacobianTimer");
+	SolveTimer = perfHandler->getTimer("SolveTimer");
 }
 
 PetscSolver::~PetscSolver()
@@ -282,6 +282,12 @@ PetscSolver::initialize()
 		ierr, "PetscSolver::initialize: PetscOptionsInsertString failed.");
 	ierr = PetscOptionsPush(petscOptions);
 	checkPetscError(ierr, "PetscSolver::initialize: PetscOptionsPush failed.");
+
+	// Check the option -snes_mf_operator
+	PetscBool flagReduced;
+	ierr = PetscOptionsHasName(NULL, NULL, "-snes_mf_operator", &flagReduced);
+	auto& network = getSolverHandler().getNetwork();
+	network.setEnableReducedJacobian(flagReduced);
 
 	// Create the solver context
 	getSolverHandler().createSolverContext(da);

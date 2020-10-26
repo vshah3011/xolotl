@@ -7,6 +7,7 @@
 #include <xolotl/core/diffusion/Diffusion3DHandler.h>
 #include <xolotl/core/diffusion/DummyDiffusionHandler.h>
 #include <xolotl/core/material/MaterialHandler.h>
+#include <xolotl/util/MPIUtils.h>
 #include <xolotl/util/TokenizedLineReader.h>
 
 namespace xolotl
@@ -15,7 +16,7 @@ namespace core
 {
 namespace material
 {
-MaterialHandler::MaterialHandler(const options::Options& options,
+MaterialHandler::MaterialHandler(const options::IOptions& options,
 	const IMaterialSubHandlerGenerator& subHandlerGenerator) :
 	_diffusionHandler(createDiffusionHandler(options)),
 	_advectionHandlers({subHandlerGenerator.generateAdvectionHandler()}),
@@ -24,10 +25,29 @@ MaterialHandler::MaterialHandler(const options::Options& options,
 {
 	initializeTrapMutationHandler(options);
 	initializeAdvectionHandlers(options);
+
+	auto xolotlComm = util::getMPIComm();
+	int procId;
+	MPI_Comm_rank(xolotlComm, &procId);
+	if (procId == 0) {
+		std::cout << "MaterialHandler: The selected material is: "
+				  << options.getMaterial() << " with the following processes: ";
+		auto processes = options.getProcesses();
+		for (auto const& process : processes) {
+			if (process.second) {
+				std::cout << process.first << " ";
+			}
+		}
+		if (!options.getFluxDepthProfileFilePath().empty()) {
+			std::cout << "; a custom fit flux handler is used reading: "
+					  << options.getFluxDepthProfileFilePath();
+		}
+		std::cout << std::endl;
+	}
 }
 
 std::shared_ptr<core::diffusion::IDiffusionHandler>
-MaterialHandler::createDiffusionHandler(const options::Options& options)
+MaterialHandler::createDiffusionHandler(const options::IOptions& options)
 {
 	double migrationThreshold = options.getMigrationThreshold();
 
@@ -61,7 +81,7 @@ MaterialHandler::createDiffusionHandler(const options::Options& options)
 }
 
 void
-MaterialHandler::initializeTrapMutationHandler(const options::Options& options)
+MaterialHandler::initializeTrapMutationHandler(const options::IOptions& options)
 {
 	if (!options.getProcesses().at("modifiedTM")) {
 		_trapMutationHandler =
@@ -73,7 +93,7 @@ MaterialHandler::initializeTrapMutationHandler(const options::Options& options)
 }
 
 void
-MaterialHandler::initializeAdvectionHandlers(const options::Options& options)
+MaterialHandler::initializeAdvectionHandlers(const options::IOptions& options)
 {
 	if (!options.getProcesses().at("advec")) {
 		_advectionHandlers.clear();

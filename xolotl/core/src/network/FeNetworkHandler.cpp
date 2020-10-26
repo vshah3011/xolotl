@@ -14,7 +14,7 @@ auto feNetworkHandlerRegistrations =
 		FeNetworkHandler>({"Fe"});
 }
 
-auto feNetworkGenerator = [](const options::Options& options) {
+auto feNetworkGenerator = [](const options::IOptions& options) {
 	using NetworkType = core::network::FeReactionNetwork;
 
 	// Get the boundaries from the options
@@ -34,7 +34,7 @@ auto feNetworkGenerator = [](const options::Options& options) {
 		while (maxHe + 1 > pow(groupingWidthHe, i)) {
 			++i;
 		}
-		maxHe = pow(groupingWidthV, i) - 1;
+		maxHe = pow(groupingWidthHe, i) - 1;
 		i = 0;
 		while (maxV + 1 > pow(groupingWidthV, i)) {
 			++i;
@@ -55,7 +55,7 @@ auto feNetworkGenerator = [](const options::Options& options) {
 	return network;
 };
 
-FeNetworkHandler::FeNetworkHandler(const options::Options& options) :
+FeNetworkHandler::FeNetworkHandler(const options::IOptions& options) :
 	NetworkHandler(options, feNetworkGenerator)
 {
 }

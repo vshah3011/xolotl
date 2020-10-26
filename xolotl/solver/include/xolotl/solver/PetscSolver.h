@@ -71,11 +71,11 @@ public:
 	 */
 	PetscSolver() = delete;
 
-	PetscSolver(const options::Options& options);
+	PetscSolver(const options::IOptions& options);
 
 	//! The Constructor
 	PetscSolver(handler::ISolverHandler& _solverHandler,
-		std::shared_ptr<perf::IHandlerRegistry> registry);
+		std::shared_ptr<perf::IPerfHandler> _perfHandler);
 
 	//! The Destructor
 	~PetscSolver();

@@ -28,9 +28,9 @@ public:
 	}
 
 	static std::string
-	getName(const options::Options&)
+	getName(const options::IOptions& options)
 	{
-		return "";
+		return options.getTempHandlerName();
 	}
 };
 } // end namespace temperature

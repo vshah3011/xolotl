@@ -14,7 +14,8 @@
 #include <xolotl/core/network/IPSIReactionNetwork.h>
 #include <xolotl/core/network/NEReactionNetwork.h>
 #include <xolotl/io/XFile.h>
-#include <xolotl/perf/xolotlPerf.h>
+#include <xolotl/perf/PerfHandlerRegistry.h>
+#include <xolotl/perf/ScopedTimer.h>
 #include <xolotl/solver/PetscSolver.h>
 #include <xolotl/solver/monitor/Monitor.h>
 #include <xolotl/util/MPIUtils.h>
@@ -2148,7 +2149,7 @@ setupPetsc1DMonitor(TS ts)
 {
 	PetscErrorCode ierr;
 
-	auto handlerRegistry = perf::getHandlerRegistry();
+	auto handlerRegistry = perf::PerfHandlerRegistry::get();
 
 	// Initialize the timers, including the one for this function.
 	initTimer = handlerRegistry->getTimer("monitor1D:init");
@@ -2418,7 +2419,7 @@ setupPetsc1DMonitor(TS ts)
 				// Get the interstitial quantity from the HDF5 file
 				nInterEvent1D = lastTsGroup->readData1D("nInterstitial");
 				// Get the previous I flux from the HDF5 file
-				previousIEventFlux1D = lastTsGroup->readData1D("previousIFlux");
+				previousIEventFlux1D = lastTsGroup->readData1D("previousFluxI");
 				// Get the previous time from the HDF5 file
 				double previousTime = lastTsGroup->readPreviousTime();
 				solverHandler.setPreviousTime(previousTime);

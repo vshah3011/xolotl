@@ -5,9 +5,8 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <xolotl/core/temperature/HeatEquation1DHandler.h>
-#include <xolotl/core/temperature/HeatEquation2DHandler.h>
-#include <xolotl/core/temperature/HeatEquation3DHandler.h>
+#include <xolotl/core/Constants.h>
+#include <xolotl/core/temperature/HeatEquationHandler.h>
 #include <xolotl/options/Options.h>
 #include <xolotl/test/config.h>
 
@@ -27,11 +26,12 @@ BOOST_AUTO_TEST_SUITE(HeatEquationHandler_testSuite)
  */
 BOOST_AUTO_TEST_CASE(checkHeat1D)
 {
+	MPI_Init(NULL, NULL);
 	// Set the DOF
 	const int dof = 9;
 
 	// Create the heat handler
-	HeatEquation1DHandler heatHandler = HeatEquation1DHandler(5.0e-12, 1000.0);
+	auto heatHandler = HeatEquationHandler(5.0e-12, 1000.0, 1);
 	heatHandler.setHeatCoefficient(tungstenHeatCoefficient);
 	heatHandler.setHeatConductivity(tungstenHeatConductivity);
 
@@ -121,7 +121,7 @@ BOOST_AUTO_TEST_CASE(checkHeat2D)
 	const int dof = 9;
 
 	// Create the heat handler
-	HeatEquation2DHandler heatHandler = HeatEquation2DHandler(5.0e-12, 1000.0);
+	auto heatHandler = HeatEquationHandler(5.0e-12, 1000.0, 2);
 	heatHandler.setHeatCoefficient(tungstenHeatCoefficient);
 	heatHandler.setHeatConductivity(tungstenHeatConductivity);
 
@@ -220,7 +220,7 @@ BOOST_AUTO_TEST_CASE(checkHeat3D)
 	const int dof = 9;
 
 	// Create the heat handler
-	HeatEquation3DHandler heatHandler = HeatEquation3DHandler(5.0e-12, 1000.0);
+	auto heatHandler = HeatEquationHandler(5.0e-12, 1000.0, 3);
 	heatHandler.setHeatCoefficient(tungstenHeatCoefficient);
 	heatHandler.setHeatConductivity(tungstenHeatConductivity);
 
@@ -318,6 +318,9 @@ BOOST_AUTO_TEST_CASE(checkHeat3D)
 	BOOST_REQUIRE_CLOSE(val[4], 6.835e+13, 0.01);
 	BOOST_REQUIRE_CLOSE(val[5], 6.835e+13, 0.01);
 	BOOST_REQUIRE_CLOSE(val[6], 6.835e+13, 0.01);
+
+	// Finalize MPI
+	MPI_Finalize();
 }
 
 BOOST_AUTO_TEST_SUITE_END()

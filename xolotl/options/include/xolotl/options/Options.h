@@ -1,5 +1,4 @@
-#ifndef OPTIONS_H
-#define OPTIONS_H
+#pragma once
 
 #include <xolotl/options/IOptions.h>
 
@@ -35,34 +34,19 @@ protected:
 	std::string petscArg;
 
 	/**
-	 * Use the constant temperature set of handlers?
+	 * Name of the temperature handler to use
 	 */
-	bool constTempFlag;
+	std::string tempHandlerName;
 
 	/**
-	 * Value for the constant temperature.
+	 * Temperature parameter values
 	 */
-	double constTemperature;
-
-	/**
-	 * Use the temperature profile set of handlers?
-	 */
-	bool tempProfileFlag;
+	std::array<double, 2> tempParam;
 
 	/**
 	 * Name of the input temperature profile file.
 	 */
 	std::string tempProfileFilename;
-
-	/**
-	 * Use the heat equation set of handlers?
-	 */
-	bool heatFlag;
-
-	/**
-	 * Value for the bulk temperature.
-	 */
-	double bulkTemperature;
 
 	/**
 	 * Use the flux amplitude option?
@@ -85,14 +69,14 @@ protected:
 	std::string fluxTimeProfileFilePath;
 
 	/**
-	 * Which type of performance infrastructure should we use?
+	 * Name of the perf handler
 	 */
-	perf::IHandlerRegistry::RegistryType perfRegistryType;
+	std::string perfHandlerName;
 
 	/**
-	 * Use the "standard" set of handlers for the visualization infrastructure?
+	 * Name of the viz handler
 	 */
-	bool vizStandardHandlersFlag;
+	std::string vizHandlerName;
 
 	/**
 	 * Name of the material.
@@ -176,11 +160,6 @@ protected:
 	bool useHDF5Flag;
 
 	/**
-	 * Use the phase cut for the network?
-	 */
-	bool usePhaseCutFlag;
-
-	/**
 	 * Maximum number of He or Xe
 	 */
 	int maxImpurity;
@@ -247,11 +226,6 @@ protected:
 	double burstingDepth;
 
 	/**
-	 * Minimum size for the bursting.
-	 */
-	int burstingMinSize;
-
-	/**
 	 * Factor used in bursting probability.
 	 */
 	double burstingFactor;
@@ -271,11 +245,6 @@ protected:
 	 * Whether to print the value used to seed the random number generator.
 	 */
 	bool rngPrintSeed;
-
-	/**
-	 * Re-solution minimum size
-	 */
-	int resoMinSize;
 
 	/**
 	 * Average radius computation minimum size
@@ -428,34 +397,16 @@ public:
 		return petscArg;
 	}
 
-	/**
-	 * Should we use const temperature handlers?
-	 * \see IOptions.h
-	 */
-	bool
-	useConstTemperatureHandlers() const override
+	std::string
+	getTempHandlerName() const override
 	{
-		return constTempFlag;
+		return tempHandlerName;
 	}
 
-	/**
-	 * Obtain the value of the constant temperature to be used.
-	 * \see IOptions.h
-	 */
 	double
-	getConstTemperature() const override
+	getTempParam(std::size_t i = 0) const override
 	{
-		return constTemperature;
-	}
-
-	/**
-	 * Should we use temperature profile handlers?
-	 * \see IOptions.h
-	 */
-	bool
-	useTemperatureProfileHandlers() const override
-	{
-		return tempProfileFlag;
+		return tempParam[i];
 	}
 
 	/**
@@ -466,26 +417,6 @@ public:
 	getTempProfileFilename() const override
 	{
 		return tempProfileFilename;
-	}
-
-	/**
-	 * Should we use heat equation handlers?
-	 * \see IOptions.h
-	 */
-	bool
-	useHeatEquationHandlers() const override
-	{
-		return heatFlag;
-	}
-
-	/**
-	 * Obtain the value of the temperature to be used in the bulk.
-	 * \see IOptions.h
-	 */
-	double
-	getBulkTemperature() const override
-	{
-		return bulkTemperature;
 	}
 
 	/**
@@ -530,24 +461,24 @@ public:
 	}
 
 	/**
-	 * Which type of performance handlers should we use?
+	 * Name of perfomance handler to use
 	 * \see IOptions.h
 	 */
-	perf::IHandlerRegistry::RegistryType
-	getPerfHandlerType(void) const override
+	std::string
+	getPerfHandlerName() const override
 	{
-		return perfRegistryType;
+		return perfHandlerName;
 	}
 
 	/**
-	 * Should we use the "standard" set of handlers for the visualization?
-	 * If false, use dummy (stub) handlers.
-	 * \see IOptions.h
+	 * Obtain the name of the visualization handler to be used
+	 *
+	 * @return The name of the viz handler
 	 */
-	bool
-	useVizStandardHandlers() const override
+	std::string
+	getVizHandlerName() const override
 	{
-		return vizStandardHandlersFlag;
+		return vizHandlerName;
 	}
 
 	/**
@@ -709,16 +640,6 @@ public:
 	useHDF5() const override
 	{
 		return useHDF5Flag;
-	}
-
-	/**
-	 * To know if we should use the phase cut.
-	 * \see IOptions.h
-	 */
-	bool
-	usePhaseCut() const override
-	{
-		return usePhaseCutFlag;
 	}
 
 	/**
@@ -922,16 +843,6 @@ public:
 	}
 
 	/**
-	 * Obtain the minimum size for the re-solution.
-	 * \see IOptions.h
-	 */
-	int
-	getResoMinSize() const override
-	{
-		return resoMinSize;
-	}
-
-	/**
 	 * Obtain the minimum size for the average radius computation.
 	 * \see IOptions.h
 	 */
@@ -959,16 +870,6 @@ public:
 	getPulseTime() const override
 	{
 		return pulseTime;
-	}
-
-	/**
-	 * Obtain the value of the minimum size at which the bursting is happening.
-	 * \see IOptions.h
-	 */
-	int
-	getBurstingSize() const override
-	{
-		return burstingMinSize;
 	}
 
 	/**
@@ -1072,8 +973,5 @@ public:
 	}
 };
 // end class Options
-
 } /* namespace options */
 } /* namespace xolotl */
-
-#endif // OPTIONS_H

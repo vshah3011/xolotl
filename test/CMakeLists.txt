@@ -12,12 +12,13 @@ execute_process(COMMAND
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/config.h.in"
     "${XOLOTL_BINARY_INCLUDE_DIR}/xolotl/test/config.h"
 )
+include_directories(${XOLOTL_BINARY_INCLUDE_DIR} ${XOLOTL_TEST_INCLUDE_DIR})
 
 add_subdirectory(util)
 add_subdirectory(core)
 add_subdirectory(io)
+add_subdirectory(interface)
 add_subdirectory(options)
 add_subdirectory(perf)
-add_subdirectory(solver)
 add_subdirectory(viz)
 add_subdirectory(system)

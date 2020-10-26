@@ -1,29 +1,24 @@
 #pragma once
 
-#include <xolotl/factory/viz/VizHandlerRegistryFactory.h>
-#include <xolotl/options/Options.h>
-#include <xolotl/viz/IVizHandlerRegistry.h>
+#include <memory>
+
+#include <xolotl/viz/IVizHandler.h>
 
 namespace xolotl
 {
 namespace viz
 {
-class VizHandlerRegistry : public IVizHandlerRegistry
+class VizHandlerRegistry
 {
 public:
-	VizHandlerRegistry(const options::Options& options);
+	static void
+	set(const std::shared_ptr<IVizHandler>& handler);
 
-	std::shared_ptr<IPlot>
-	getPlot(const std::string& name, PlotType type);
-
-	static IVizHandlerRegistry*
-	get()
-	{
-		return staticVizHandlerRegistry.get();
-	}
+	static const std::shared_ptr<IVizHandler>&
+	get();
 
 private:
-	static std::shared_ptr<IVizHandlerRegistry> staticVizHandlerRegistry;
+	static std::shared_ptr<IVizHandler> vizHandler;
 };
 } // namespace viz
 } // namespace xolotl

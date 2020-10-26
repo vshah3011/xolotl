@@ -2,6 +2,8 @@
 #define SOLVER_H
 
 // Includes
+#include <xolotl/options/IOptions.h>
+#include <xolotl/perf/IPerfHandler.h>
 #include <xolotl/solver/ISolver.h>
 
 namespace xolotl
@@ -43,12 +45,12 @@ public:
 	 */
 	Solver() = delete;
 
-	Solver(const options::Options& options,
+	Solver(const options::IOptions& options,
 		SolverHandlerGenerator handlerGenerator);
 
 	//! Constuct a solver.
 	Solver(handler::ISolverHandler& _solverHandler,
-		std::shared_ptr<perf::IHandlerRegistry> registry);
+		std::shared_ptr<perf::IPerfHandler> _perfHandler);
 
 	//! The Destructor
 	virtual ~Solver(){};
@@ -80,7 +82,7 @@ protected:
 	 * The performance handler registry that will be used
 	 * for this class.
 	 */
-	std::shared_ptr<perf::IHandlerRegistry> handlerRegistry;
+	std::shared_ptr<perf::IPerfHandler> perfHandler;
 };
 // end class Solver
 
