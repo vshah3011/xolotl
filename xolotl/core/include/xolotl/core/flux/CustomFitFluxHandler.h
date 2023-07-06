@@ -103,7 +103,7 @@ public:
 		xGrid = grid;
 
 		// Read the parameter file
-		fs::ifstream paramFile(profileFilePath);
+		std::ifstream paramFile(profileFilePath.c_str());
 
 		// Gets the process ID
 		int procId;

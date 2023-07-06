@@ -247,6 +247,8 @@ PSISinkReaction<TSpeciesEnum>::computeRate(IndexType gridIndex, double time)
 {
 	auto cl = this->_clusterData->getCluster(this->_reactant);
 	double dc = cl.getDiffusionCoefficient(gridIndex);
+	
+	double grainSize = 50000.0; // 50 um
 
 	auto rate = this->_clusterData->extraData.leftSideRates;
 	double s_m = 0.0;
@@ -260,8 +262,21 @@ PSISinkReaction<TSpeciesEnum>::computeRate(IndexType gridIndex, double time)
 		}
 		s_m = rate(i) / dc;
 	}
+	
+	if (util::equal(s_m,0)){
+	    return 0;
+	}
+	
+	double s_sk = 0;  // Define the gb sink strength
+	double tan = 0;   // Define the tanh term
+	double cot = 0;   // Defin the coth term
+	tan = tanh(sqrt(s_m)*grainSize/2);
+	double term1 = (sqrt(s_m)*grainSize)/2*(1/tan);   // Repetitive term
+	// Calculate the sink term
+	s_sk = s_m*(term1 - 1)*(1/(1+(s_m*(grainSize*grainSize)/12) - term1));
+	//std::cout<<tan<<" "<<term1<<" "<<s_sk<<std::endl;
 
-	double strength = this->getSinkBias() * this->getSinkStrength() * dc;
+	double strength = s_sk*dc;
 
 	return strength;
 }

@@ -781,6 +781,11 @@ PSIReactionGenerator<TSpeciesEnum>::addSinks(IndexType i, TTag tag) const
 		if (lo[Species::V] == 1)
 			this->addSinkReaction(tag, {i, NetworkType::invalidIndex()});
 	}
+	
+	//He
+	if (clReg.isSimplex() && lo.isOnAxis(Species::He)) {
+			this->addSinkReaction(tag, {i, NetworkType::invalidIndex()});
+	}
 }
 
 template <typename TSpeciesEnum>
