@@ -248,7 +248,7 @@ PSISinkReaction<TSpeciesEnum>::computeRate(IndexType gridIndex, double time)
 	auto cl = this->_clusterData->getCluster(this->_reactant);
 	double dc = cl.getDiffusionCoefficient(gridIndex);
 	
-	double grainSize = 50000.0; // 50 um
+	double grainSize = 50000.0; // 50 um   // Constant as of now
 
 	auto rate = this->_clusterData->extraData.leftSideRates;
 	double s_m = 0.0;
@@ -263,20 +263,32 @@ PSISinkReaction<TSpeciesEnum>::computeRate(IndexType gridIndex, double time)
 		s_m = rate(i) / dc;
 	}
 	
+	// Grain boundary
+	double gb_strength = 0;
+	
 	if (util::equal(s_m,0)){
-	    return 0;
+	    gb_strength = 0;
+	} else { 
+	  double s_sk = 0;  // Define the gb sink strength
+	  double tan = 0;   // Define the tanh term
+	  double cot = 0;   // Defin the coth term
+	  tan = tanh(sqrt(s_m)*grainSize/2); // Compute the gb sink strength
+	  double term1 = (sqrt(s_m)*grainSize)/2*(1/tan);   // Repetitive term
+	// Calculate the sink term
+	  s_sk = s_m*(term1 - 1)*(1/(1+(s_m*(grainSize*grainSize)/12) - term1));
+	//std::cout<<tan<<" "<<term1<<" "<<s_sk<<std::endl;
+	  gb_strength = s_sk*dc;
 	}
 	
-	double s_sk = 0;  // Define the gb sink strength
-	double tan = 0;   // Define the tanh term
-	double cot = 0;   // Defin the coth term
-	tan = tanh(sqrt(s_m)*grainSize/2);
-	double term1 = (sqrt(s_m)*grainSize)/2*(1/tan);   // Repetitive term
-	// Calculate the sink term
-	s_sk = s_m*(term1 - 1)*(1/(1+(s_m*(grainSize*grainSize)/12) - term1));
-	//std::cout<<tan<<" "<<term1<<" "<<s_sk<<std::endl;
+	
 
-	double strength = s_sk*dc;
+    // Define the dislocation density
+    double disl = 1E-6;
+
+    // Dislocation sink strength
+    double disl_strength = this->asDerived()->getSinkBias()* disl * dc;
+
+	double strength = gb_strength + disl_strength;
 
 	return strength;
 }
