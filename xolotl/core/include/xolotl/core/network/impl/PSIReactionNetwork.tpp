@@ -65,6 +65,10 @@ void
 PSIReactionNetwork<TSpeciesEnum>::initializeExtraDOFs(
 	const options::IOptions& options)
 {
+	if (!this->_enableSink) {
+		return;
+	}
+
 	this->_clusterData.h_view().setHeliumDisloId(this->_numDOFs);
 	this->_clusterData.h_view().setHeliumGBId(this->_numDOFs + 1);
 	this->_numDOFs += 2;
