@@ -1249,11 +1249,12 @@ PetscMonitor1D::computeHeliumRetention(
 		}
 		auto tempHandler = _solverHandler->getTemperatureHandler();
 		outputFile << _nHeliumBurst << " " << _nDeuteriumBurst << " "
-				   << _nTritiumBurst << std::endl;
+				   << _nTritiumBurst << " ";
 		if (isSink) {
 			outputFile << totalConcData[numSpecies] << " "
 					   << totalConcData[numSpecies + 1];
 		}
+		outputFile << std::endl;
 		outputFile.close();
 
 		if (_solverHandler->temporalFlux()) {
