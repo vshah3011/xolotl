@@ -136,6 +136,9 @@ protected:
 	//! If the user wants to burst bubbles.
 	bool bubbleBursting;
 
+	//! If the user has sinks enabled.
+	bool enabledSink;
+
 	//! If the user wants to use x mirror boundary conditions or periodic ones.
 	bool isMirror;
 
@@ -576,6 +579,15 @@ public:
 	burstBubbles() const override
 	{
 		return bubbleBursting;
+	}
+
+	/**
+	 * \see ISolverHandler.h
+	 */
+	bool
+	isSink() const override
+	{
+		return enabledSink;
 	}
 
 	/**

@@ -90,6 +90,9 @@ public:
 	initializeExtraClusterData(const options::IOptions& options);
 
 	void
+	initializeExtraDOFs(const options::IOptions& options);
+
+	void
 	updateExtraClusterData(const std::vector<double>& gridTemps,
 		const std::vector<double>& gridDepths);
 

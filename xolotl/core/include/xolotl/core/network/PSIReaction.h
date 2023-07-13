@@ -76,6 +76,57 @@ public:
 	double
 	computeRate(IndexType gridIndex, double time = 0.0);
 };
+
+template <typename TSpeciesEnum>
+class PSIDisloSinkReaction :
+	public DisloSinkReaction<PSIReactionNetwork<TSpeciesEnum>,
+		PSIDisloSinkReaction<TSpeciesEnum>>
+{
+public:
+	using Superclass = DisloSinkReaction<PSIReactionNetwork<TSpeciesEnum>,
+		PSIDisloSinkReaction<TSpeciesEnum>>;
+
+	using Superclass::Superclass;
+	using IndexType = typename Superclass::IndexType;
+
+	KOKKOS_INLINE_FUNCTION
+	double
+	getSinkBias();
+
+	KOKKOS_INLINE_FUNCTION
+	double
+	getSinkStrength();
+
+	KOKKOS_INLINE_FUNCTION
+	double
+	computeRate(IndexType gridIndex, double time = 0.0);
+};
+
+template <typename TSpeciesEnum>
+class PSIGBSinkReaction :
+	public GBSinkReaction<PSIReactionNetwork<TSpeciesEnum>,
+		PSIGBSinkReaction<TSpeciesEnum>>
+{
+public:
+	using Superclass = GBSinkReaction<PSIReactionNetwork<TSpeciesEnum>,
+		PSIGBSinkReaction<TSpeciesEnum>>;
+
+	using Superclass::Superclass;
+	using IndexType = typename Superclass::IndexType;
+
+	KOKKOS_INLINE_FUNCTION
+	double
+	getSinkBias();
+
+	KOKKOS_INLINE_FUNCTION
+	double
+	getSinkStrength();
+
+	KOKKOS_INLINE_FUNCTION
+	double
+	computeRate(IndexType gridIndex, double time = 0.0);
+};
+
 template <typename TSpeciesEnum>
 class PSITrapMutationReaction :
 	public TrapMutationReaction<PSIReactionNetwork<TSpeciesEnum>,

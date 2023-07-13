@@ -420,6 +420,14 @@ public:
 	burstBubbles() const = 0;
 
 	/**
+	 * To know if the sinks are used.
+	 *
+	 * @return True if sinks are used.
+	 */
+	virtual bool
+	isSink() const = 0;
+
+	/**
 	 * To know if a temporal profile is used for the flux.
 	 *
 	 * @return True if temporal flux option is used.

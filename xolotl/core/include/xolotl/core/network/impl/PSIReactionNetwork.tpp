@@ -62,6 +62,16 @@ PSIReactionNetwork<TSpeciesEnum>::initializeExtraClusterData(
 
 template <typename TSpeciesEnum>
 void
+PSIReactionNetwork<TSpeciesEnum>::initializeExtraDOFs(
+	const options::IOptions& options)
+{
+	this->_clusterData.h_view().setHeliumDisloId(this->_numDOFs);
+	this->_clusterData.h_view().setHeliumGBId(this->_numDOFs + 1);
+	this->_numDOFs += 2;
+}
+
+template <typename TSpeciesEnum>
+void
 PSIReactionNetwork<TSpeciesEnum>::updateExtraClusterData(
 	const std::vector<double>& gridTemps, const std::vector<double>& gridDepths)
 {
@@ -771,6 +781,8 @@ PSIReactionGenerator<TSpeciesEnum>::addSinks(IndexType i, TTag tag) const
 	const auto& clReg = this->getCluster(i).getRegion();
 	Composition lo = clReg.getOrigin();
 
+	// TODO: add the correct sinks to each type of cluster
+
 	// I
 	if (lo.isOnAxis(Species::I)) {
 		this->addSinkReaction(tag, {i, NetworkType::invalidIndex()});
@@ -781,10 +793,12 @@ PSIReactionGenerator<TSpeciesEnum>::addSinks(IndexType i, TTag tag) const
 		if (lo[Species::V] == 1)
 			this->addSinkReaction(tag, {i, NetworkType::invalidIndex()});
 	}
-	
-	//He
+
+	// He
 	if (clReg.isSimplex() && lo.isOnAxis(Species::He)) {
-			this->addSinkReaction(tag, {i, NetworkType::invalidIndex()});
+		this->addDisloSinkReaction(
+			tag, {i, this->_clusterData.heliumDisloId()});
+		this->addGBSinkReaction(tag, {i, this->_clusterData.heliumGBId()});
 	}
 }
 
@@ -795,7 +809,8 @@ PSIReactionGenerator<TSpeciesEnum>::getReactionCollection() const
 {
 	ReactionCollection<NetworkType> ret(this->_clusterData.gridSize,
 		this->getProductionReactions(), this->getDissociationReactions(),
-		this->getSinkReactions(), this->getTrapMutationReactions());
+		this->getSinkReactions(), this->getDisloSinkReactions(),
+		this->getGBSinkReactions(), this->getTrapMutationReactions());
 	return ret;
 }
 } // namespace detail

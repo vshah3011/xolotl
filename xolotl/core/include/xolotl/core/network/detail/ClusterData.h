@@ -143,6 +143,13 @@ private:
 		NUM_FLOAT_VALS
 	};
 
+	enum IntValsIndex : int
+	{
+		HELIUM_DISLO_ID = 0,
+		HELIUM_GB_ID,
+		NUM_INT_VALS
+	};
+
 	enum BoolValsIndex : int
 	{
 		STD_REACTION = 0,
@@ -215,6 +222,32 @@ public:
 	setZeta(double val)
 	{
 		setVal(_floatVals, ZETA, val);
+	}
+
+	KOKKOS_INLINE_FUNCTION
+	IndexType
+	heliumDisloId() const
+	{
+		return _intVals[HELIUM_DISLO_ID];
+	}
+
+	void
+	setHeliumDisloId(IndexType val)
+	{
+		setVal(_intVals, HELIUM_DISLO_ID, val);
+	}
+
+	KOKKOS_INLINE_FUNCTION
+	IndexType
+	heliumGBId() const
+	{
+		return _intVals[HELIUM_GB_ID];
+	}
+
+	void
+	setHeliumGBId(IndexType val)
+	{
+		setVal(_intVals, HELIUM_GB_ID, val);
 	}
 
 	KOKKOS_INLINE_FUNCTION
@@ -297,6 +330,7 @@ public:
 
 private:
 	View<double[NUM_FLOAT_VALS]> _floatVals;
+	View<IndexType[NUM_INT_VALS]> _intVals;
 	View<bool[NUM_BOOL_VALS]> _boolVals;
 
 public:

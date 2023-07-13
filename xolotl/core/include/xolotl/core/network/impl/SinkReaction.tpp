@@ -24,6 +24,36 @@ SinkReaction<TNetwork, TDerived>::computeRate(IndexType gridIndex, double time)
 
 	return strength;
 }
+
+template <typename TNetwork, typename TDerived>
+KOKKOS_INLINE_FUNCTION
+double
+DisloSinkReaction<TNetwork, TDerived>::computeRate(
+	IndexType gridIndex, double time)
+{
+	auto cl = this->_clusterData->getCluster(_reactant);
+	double dc = cl.getDiffusionCoefficient(gridIndex);
+
+	double strength = this->asDerived()->getSinkBias() *
+		this->asDerived()->getSinkStrength() * dc;
+
+	return strength;
+}
+
+template <typename TNetwork, typename TDerived>
+KOKKOS_INLINE_FUNCTION
+double
+GBSinkReaction<TNetwork, TDerived>::computeRate(
+	IndexType gridIndex, double time)
+{
+	auto cl = this->_clusterData->getCluster(_reactant);
+	double dc = cl.getDiffusionCoefficient(gridIndex);
+
+	double strength = this->asDerived()->getSinkBias() *
+		this->asDerived()->getSinkStrength() * dc;
+
+	return strength;
+}
 } // namespace network
 } // namespace core
 } // namespace xolotl

@@ -68,6 +68,9 @@ ReactionNetwork<TImpl>::ReactionNetwork(const Subpaving& subpaving,
 	generateClusterData(ClusterGenerator{opts});
 	defineMomentIds();
 
+	// Extra potential DOFs
+	asDerived()->initializeExtraDOFs(opts);
+
 	// Skip the reactions for now if using constant reactions
 	if (map["constant"])
 		return;
