@@ -1,0 +1,65 @@
+diff --git a/xolotl/core/include/xolotl/core/flux/CustomFitFluxHandler.h b/xolotl/core/include/xolotl/core/flux/CustomFitFluxHandler.h
+index 4fff5af1..24c18a2c 100644
+--- a/xolotl/core/include/xolotl/core/flux/CustomFitFluxHandler.h
++++ b/xolotl/core/include/xolotl/core/flux/CustomFitFluxHandler.h
+@@ -103,7 +103,7 @@ public:
+ 		xGrid = grid;
+ 
+ 		// Read the parameter file
+-		fs::ifstream paramFile(profileFilePath);
++		std::ifstream paramFile(profileFilePath.c_str());
+ 
+ 		// Gets the process ID
+ 		int procId;
+diff --git a/xolotl/core/include/xolotl/core/network/impl/PSIReaction.tpp b/xolotl/core/include/xolotl/core/network/impl/PSIReaction.tpp
+index 4315dd9e..042eb0cc 100644
+--- a/xolotl/core/include/xolotl/core/network/impl/PSIReaction.tpp
++++ b/xolotl/core/include/xolotl/core/network/impl/PSIReaction.tpp
+@@ -247,6 +247,8 @@ PSISinkReaction<TSpeciesEnum>::computeRate(IndexType gridIndex, double time)
+ {
+ 	auto cl = this->_clusterData->getCluster(this->_reactant);
+ 	double dc = cl.getDiffusionCoefficient(gridIndex);
++	
++	double grainSize = 50000.0; // 50 um
+ 
+ 	auto rate = this->_clusterData->extraData.leftSideRates;
+ 	double s_m = 0.0;
+@@ -260,8 +262,21 @@ PSISinkReaction<TSpeciesEnum>::computeRate(IndexType gridIndex, double time)
+ 		}
+ 		s_m = rate(i) / dc;
+ 	}
++	
++	if (util::equal(s_m,0)){
++	    return 0;
++	}
++	
++	double s_sk = 0;  // Define the gb sink strength
++	double tan = 0;   // Define the tanh term
++	double cot = 0;   // Defin the coth term
++	tan = tanh(sqrt(s_m)*grainSize/2);
++	double term1 = (sqrt(s_m)*grainSize)/2*(1/tan);   // Repetitive term
++	// Calculate the sink term
++	s_sk = s_m*(term1 - 1)*(1/(1+(s_m*(grainSize*grainSize)/12) - term1));
++	//std::cout<<tan<<" "<<term1<<" "<<s_sk<<std::endl;
+ 
+-	double strength = this->getSinkBias() * this->getSinkStrength() * dc;
++	double strength = s_sk*dc;
+ 
+ 	return strength;
+ }
+diff --git a/xolotl/core/include/xolotl/core/network/impl/PSIReactionNetwork.tpp b/xolotl/core/include/xolotl/core/network/impl/PSIReactionNetwork.tpp
+index 932e29ae..705a1bdf 100644
+--- a/xolotl/core/include/xolotl/core/network/impl/PSIReactionNetwork.tpp
++++ b/xolotl/core/include/xolotl/core/network/impl/PSIReactionNetwork.tpp
+@@ -781,6 +781,11 @@ PSIReactionGenerator<TSpeciesEnum>::addSinks(IndexType i, TTag tag) const
+ 		if (lo[Species::V] == 1)
+ 			this->addSinkReaction(tag, {i, NetworkType::invalidIndex()});
+ 	}
++	
++	//He
++	if (clReg.isSimplex() && lo.isOnAxis(Species::He)) {
++			this->addSinkReaction(tag, {i, NetworkType::invalidIndex()});
++	}
+ }
+ 
+ template <typename TSpeciesEnum>

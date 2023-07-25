@@ -64,7 +64,7 @@ template <typename TSpeciesEnum>
 void
 PSIReactionNetwork<TSpeciesEnum>::initializeExtraDOFs(
 	const options::IOptions& options)
-{
+{   
 	if (!this->_enableSink) {
 		return;
 	}
@@ -800,8 +800,7 @@ PSIReactionGenerator<TSpeciesEnum>::addSinks(IndexType i, TTag tag) const
 
 	// He
 	if (clReg.isSimplex() && lo.isOnAxis(Species::He)) {
-		this->addDisloSinkReaction(
-			tag, {i, this->_clusterData.heliumDisloId()});
+		this->addDisloSinkReaction(tag, {i, this->_clusterData.heliumDisloId()});
 		this->addGBSinkReaction(tag, {i, this->_clusterData.heliumGBId()});
 	}
 }

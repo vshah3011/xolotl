@@ -103,5 +103,8 @@ constexpr double basalTransitionSize = 325;
 // Tungsten density in nm^-3
 constexpr double tungstenDensity = 62.8;
 
+// Network dislocation density initial in nm^-2
+constexpr double rho_d = 1E-6;
+
 } /* end namespace core */
 } /* end namespace xolotl */
