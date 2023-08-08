@@ -531,7 +531,7 @@ PetscMonitor1D::setup(int loop)
 					outputFile << speciesName << "_surface ";
 				}
 			}
-			outputFile << "Helium_burst Deuterium_burst Tritium_burst ";
+			outputFile << "Helium_burst Deuterium_burst Tritium_burst Disl_dens ";
 			if (_solverHandler->isSink())
 				outputFile << "He_dislo He_GB";
 			outputFile << std::endl;
@@ -981,7 +981,7 @@ PetscMonitor1D::computeHeliumRetention(
 	// Store the concentration over the grid
 	auto numSpecies = network.getSpeciesListSize();
 	auto specIdI = network.getInterstitialSpeciesId();
-	auto myConcData = std::vector<double>(numSpecies + 2 * isSink, 0.0);
+	auto myConcData = std::vector<double>(numSpecies + 1 + 2 * isSink, 0.0);
 
 	// Declare the pointer for the concentrations at a specific grid point
 	PetscReal* gridPointSolution;
@@ -1016,10 +1016,13 @@ PetscMonitor1D::computeHeliumRetention(
 		for (auto id = core::network::SpeciesId(numSpecies); id; ++id) {
 			myConcData[id()] += totals[id()] * hx;
 		}
+		// Summed over 1d profile as of now
+		myConcData[numSpecies] +=
+		    gridPointSolution[dof - 3] * hx;     // Dislocation density
 		if (isSink) {
-			myConcData[numSpecies] +=
-				gridPointSolution[dof - 2] * hx; // He dislo
 			myConcData[numSpecies + 1] +=
+				gridPointSolution[dof - 2] * hx; // He dislo
+			myConcData[numSpecies + 2] +=
 				gridPointSolution[dof - 1] * hx; // He GB
 		}
 	}
@@ -1030,9 +1033,9 @@ PetscMonitor1D::computeHeliumRetention(
 	MPI_Comm_rank(xolotlComm, &procId);
 
 	// Determine total concentrations for He, D, T.
-	auto totalConcData = std::vector<double>(numSpecies + 2 * isSink, 0.0);
+	auto totalConcData = std::vector<double>(numSpecies + 1 + 2 * isSink, 0.0);
 
-	MPI_Reduce(myConcData.data(), totalConcData.data(), numSpecies + 2 * isSink,
+	MPI_Reduce(myConcData.data(), totalConcData.data(), numSpecies + 1 + 2 * isSink,
 		MPI_DOUBLE, MPI_SUM, 0, xolotlComm);
 
 	// Get the delta time from the previous timestep to this timestep
@@ -1249,10 +1252,10 @@ PetscMonitor1D::computeHeliumRetention(
 		}
 		auto tempHandler = _solverHandler->getTemperatureHandler();
 		outputFile << _nHeliumBurst << " " << _nDeuteriumBurst << " "
-				   << _nTritiumBurst << " ";
+				   << _nTritiumBurst << " " << totalConcData[numSpecies] << " ";
 		if (isSink) {
-			outputFile << totalConcData[numSpecies] << " "
-					   << totalConcData[numSpecies + 1];
+			outputFile << totalConcData[numSpecies + 1] << " "
+					   << totalConcData[numSpecies + 2];
 		}
 		outputFile << std::endl;
 		outputFile.close();
