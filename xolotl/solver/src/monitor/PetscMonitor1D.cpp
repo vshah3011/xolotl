@@ -531,7 +531,8 @@ PetscMonitor1D::setup(int loop)
 					outputFile << speciesName << "_surface ";
 				}
 			}
-			outputFile << "Helium_burst Deuterium_burst Tritium_burst Disl_dens ";
+			outputFile
+				<< "Helium_burst Deuterium_burst Tritium_burst Disl_dens ";
 			if (_solverHandler->isSink())
 				outputFile << "He_dislo He_GB";
 			outputFile << std::endl;
@@ -1018,7 +1019,7 @@ PetscMonitor1D::computeHeliumRetention(
 		}
 		// Summed over 1d profile as of now
 		myConcData[numSpecies] +=
-		    gridPointSolution[dof - 3] * hx;     // Dislocation density
+			gridPointSolution[dof - 3] * hx; // Dislocation density
 		if (isSink) {
 			myConcData[numSpecies + 1] +=
 				gridPointSolution[dof - 2] * hx; // He dislo
@@ -1035,8 +1036,8 @@ PetscMonitor1D::computeHeliumRetention(
 	// Determine total concentrations for He, D, T.
 	auto totalConcData = std::vector<double>(numSpecies + 1 + 2 * isSink, 0.0);
 
-	MPI_Reduce(myConcData.data(), totalConcData.data(), numSpecies + 1 + 2 * isSink,
-		MPI_DOUBLE, MPI_SUM, 0, xolotlComm);
+	MPI_Reduce(myConcData.data(), totalConcData.data(),
+		numSpecies + 1 + 2 * isSink, MPI_DOUBLE, MPI_SUM, 0, xolotlComm);
 
 	// Get the delta time from the previous timestep to this timestep
 	double previousTime = _solverHandler->getPreviousTime();

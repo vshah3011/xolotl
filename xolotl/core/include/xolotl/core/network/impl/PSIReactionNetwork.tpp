@@ -64,17 +64,21 @@ template <typename TSpeciesEnum>
 void
 PSIReactionNetwork<TSpeciesEnum>::initializeExtraDOFs(
 	const options::IOptions& options)
-{   
-    this->_clusterData.h_view().setDisloId(this->_numDOFs);
-    this->_numDOFs += 1;
-    
+{
+	this->_clusterData.h_view().setDisloId(this->_numDOFs);
+	this->_numDOFs += 1;
+
 	if (!this->_enableSink) {
+		this->copyClusterDataView();
+		this->invalidateDataMirror();
 		return;
 	}
-	
+
 	this->_clusterData.h_view().setHeliumDisloId(this->_numDOFs);
 	this->_clusterData.h_view().setHeliumGBId(this->_numDOFs + 1);
 	this->_numDOFs += 2;
+	this->copyClusterDataView();
+	this->invalidateDataMirror();
 }
 
 template <typename TSpeciesEnum>
@@ -170,11 +174,162 @@ PSIReactionNetwork<TSpeciesEnum>::selectTrapMutationReactions(
 }
 
 template <typename TSpeciesEnum>
+KOKKOS_INLINE_FUNCTION
+void
+PSIReactionNetwork<TSpeciesEnum>::setConnectivity(
+	typename PSIReactionNetwork<TSpeciesEnum>::Connectivity conn)
+{
+	// Count
+	IndexType nPartials = 1; // For the dislocation density
+
+	auto& subpaving = this->getSubpaving();
+
+	// Connects to single vacancy
+	Composition comp = Composition::zero();
+	comp[Species::V] = 1;
+	auto clusterId = subpaving.findTileId(comp);
+	if (clusterId != subpaving.invalidIndex())
+		nPartials++;
+
+	// Connects to interstitials
+	comp = Composition::zero();
+	comp[Species::I] = 1;
+	clusterId = subpaving.findTileId(comp);
+	bool isValid = (clusterId != subpaving.invalidIndex());
+	while (isValid) {
+		nPartials++;
+		comp[Species::I]++;
+		clusterId = subpaving.findTileId(comp);
+		isValid = (clusterId != subpaving.invalidIndex());
+	}
+
+	// Create the view
+	this->_connEntries = Kokkos::View<IndexType*>(
+		"Connectivity entries for extra DOFs", nPartials);
+
+	// Save the entries
+	// Get the dislocation density Id
+	auto disloId = this->_clusterData.d_view().DisloId();
+	this->_connEntries(0) = conn(disloId, disloId);
+	nPartials = 1;
+
+	// Connects to single vacancy
+	comp = Composition::zero();
+	comp[Species::V] = 1;
+	clusterId = subpaving.findTileId(comp);
+	if (clusterId != subpaving.invalidIndex()) {
+		this->_connEntries(nPartials) = conn(disloId, clusterId);
+		nPartials++;
+	}
+
+	// Connects to interstitials
+	comp = Composition::zero();
+	comp[Species::I] = 1;
+	clusterId = subpaving.findTileId(comp);
+	isValid = (clusterId != subpaving.invalidIndex());
+	while (isValid) {
+		this->_connEntries(nPartials) = conn(disloId, clusterId);
+		nPartials++;
+		comp[Species::I]++;
+		clusterId = subpaving.findTileId(comp);
+		isValid = (clusterId != subpaving.invalidIndex());
+	}
+
+	return;
+}
+
+template <typename TSpeciesEnum>
+KOKKOS_INLINE_FUNCTION
+double
+PSIReactionNetwork<TSpeciesEnum>::getClimbVelocity(
+	ConcentrationsView concentrations, IndexType gridIndex)
+{
+	// TODO: implement the equation
+	auto disloId = this->_clusterData.d_view().DisloId();
+	auto subpaving = this->_subpaving;
+	// Compute C_eq
+	double concVEq = 1.0;
+	// Compute C_V^n
+	auto disloDensity = concentrations(disloId);
+	double concVN = exp(sqrt(0.3 * disloDensity));
+
+	// Access the concentrations and diffusion coefficients
+	double toReturn = 0.0;
+	// Single vacancy
+	Composition comp = Composition::zero();
+	comp[Species::V] = 1;
+	auto clusterId = subpaving.findTileId(comp);
+	if (clusterId != subpaving.invalidIndex()) {
+		auto diffCoef = this->_clusterData.d_view()
+							.getCluster(clusterId)
+							.getDiffusionCoefficient(gridIndex);
+		toReturn -=
+			(concentrations(clusterId) - concVN) * diffCoef; // Z is missing
+	}
+
+	// Interstitials
+	comp = Composition::zero();
+	comp[Species::I] = 1;
+	clusterId = subpaving.findTileId(comp);
+	bool isValid = (clusterId != subpaving.invalidIndex());
+	while (isValid) {
+		auto diffCoef = this->_clusterData.d_view()
+							.getCluster(clusterId)
+							.getDiffusionCoefficient(gridIndex);
+		toReturn += concentrations(clusterId) * diffCoef; // Z is missing
+		comp[Species::I]++;
+		clusterId = subpaving.findTileId(comp);
+		isValid = (clusterId != subpaving.invalidIndex());
+	}
+
+	return toReturn; // Missing the prefactor
+}
+
+template <typename TSpeciesEnum>
+KOKKOS_INLINE_FUNCTION
+double
+PSIReactionNetwork<TSpeciesEnum>::getClimbVelocityPartialRho(
+	ConcentrationsView concentrations, IndexType gridIndex)
+{
+	return 1.0;
+}
+
+template <typename TSpeciesEnum>
+KOKKOS_INLINE_FUNCTION
+double
+PSIReactionNetwork<TSpeciesEnum>::getClimbVelocityPartialV(
+	ConcentrationsView concentrations, IndexType gridIndex)
+{
+	return 1.0;
+}
+
+template <typename TSpeciesEnum>
+KOKKOS_INLINE_FUNCTION
+double
+PSIReactionNetwork<TSpeciesEnum>::getClimbVelocityPartialI(
+	ConcentrationsView concentrations, IndexType gridIndex, IndexType clusterId)
+{
+	return 1.0;
+}
+
+template <typename TSpeciesEnum>
 void
 PSIReactionNetwork<TSpeciesEnum>::computeFluxesPreProcess(
 	ConcentrationsView concentrations, FluxesView fluxes, IndexType gridIndex,
 	double surfaceDepth, double spacing)
 {
+	// Equation for dislocation density
+	Kokkos::parallel_for(
+		"PSIReactionNetwork::computeFluxesPreProcess", 1,
+		KOKKOS_LAMBDA(IndexType i) {
+			// TODO: implement beta
+			double beta = 1.0;
+			double nu_cl = getClimbVelocity(concentrations, gridIndex);
+			auto disloId = this->_clusterData.d_view().DisloId();
+			auto disloDensity = concentrations(disloId);
+			fluxes[disloId] += beta * nu_cl * pow(disloDensity, 1.5);
+		});
+
 	if (this->_enableTrapMutation) {
 		updateDesorptionLeftSideRate(concentrations, gridIndex);
 		selectTrapMutationReactions(surfaceDepth, spacing);
@@ -207,6 +362,53 @@ PSIReactionNetwork<TSpeciesEnum>::computePartialsPreProcess(
 	ConcentrationsView concentrations, Kokkos::View<double*> values,
 	IndexType gridIndex, double surfaceDepth, double spacing)
 {
+	// Equation for dislocation density
+	Kokkos::parallel_for(
+		"PSIReactionNetwork::computeFluxesPreProcess", 1,
+		KOKKOS_LAMBDA(IndexType i) {
+			// Get the dislocation density Id
+			auto disloId = this->_clusterData.d_view().DisloId();
+			auto subpaving = this->_subpaving;
+			// TODO: implement beta
+			double beta = 1.0;
+			// The first contribution is w.r.t. dislocation density
+			auto disloDensity = concentrations(disloId);
+			auto df = beta *
+				(pow(disloDensity, 1.5) *
+						getClimbVelocityPartialRho(concentrations, gridIndex) +
+					1.5 * sqrt(disloDensity) *
+						getClimbVelocity(concentrations, gridIndex));
+			values(this->_connEntries(0)) += df;
+			IndexType nPartials = 1;
+
+			// Single vacancy
+			Composition comp = Composition::zero();
+			comp[Species::V] = 1;
+			auto clusterId = subpaving.findTileId(comp);
+			if (clusterId != subpaving.invalidIndex()) {
+				df = beta * pow(disloDensity, 1.5) *
+					getClimbVelocityPartialV(concentrations, gridIndex);
+				values(this->_connEntries(nPartials)) += df;
+				nPartials++;
+			}
+
+			// Interstitials
+			comp = Composition::zero();
+			comp[Species::I] = 1;
+			clusterId = subpaving.findTileId(comp);
+			bool isValid = (clusterId != subpaving.invalidIndex());
+			while (isValid) {
+				df = beta * pow(disloDensity, 1.5) *
+					getClimbVelocityPartialI(
+						concentrations, gridIndex, clusterId);
+				values(this->_connEntries(nPartials)) += df;
+				nPartials++;
+				comp[Species::I]++;
+				clusterId = subpaving.findTileId(comp);
+				isValid = (clusterId != subpaving.invalidIndex());
+			}
+		});
+
 	if (this->_enableTrapMutation) {
 		updateDesorptionLeftSideRate(concentrations, gridIndex);
 		selectTrapMutationReactions(surfaceDepth, spacing);
@@ -803,9 +1005,48 @@ PSIReactionGenerator<TSpeciesEnum>::addSinks(IndexType i, TTag tag) const
 
 	// He
 	if (clReg.isSimplex() && lo.isOnAxis(Species::He)) {
-		this->addDisloSinkReaction(tag, {i, this->_clusterData.heliumDisloId()});
+		this->addDisloSinkReaction(
+			tag, {i, this->_clusterData.heliumDisloId()});
 		this->addGBSinkReaction(tag, {i, this->_clusterData.heliumGBId()});
 	}
+}
+
+template <typename TSpeciesEnum>
+void
+PSIReactionGenerator<TSpeciesEnum>::addConnectivity(Connectivity& conn)
+{
+	using Species = typename NetworkType::Species;
+	using Composition = typename NetworkType::Composition;
+
+	Kokkos::parallel_for(
+		"PSIReactionGenerator::addConnectivity", 1, KOKKOS_LAMBDA(IndexType i) {
+			auto& subpaving = this->getSubpaving();
+
+			// Add connectivities for the dislocation density
+			// Get the dislocation density Id
+			auto disloId = this->_clusterData.DisloId();
+			// Connects to itself
+			conn.add(disloId, disloId);
+
+			// Connects to single vacancy
+			Composition comp = Composition::zero();
+			comp[Species::V] = 1;
+			auto clusterId = subpaving.findTileId(comp);
+			if (clusterId != subpaving.invalidIndex())
+				conn.add(disloId, clusterId);
+
+			// Connects to interstitials
+			comp = Composition::zero();
+			comp[Species::I] = 1;
+			clusterId = subpaving.findTileId(comp);
+			bool isValid = (clusterId != subpaving.invalidIndex());
+			while (isValid) {
+				conn.add(disloId, clusterId);
+				comp[Species::I]++;
+				clusterId = subpaving.findTileId(comp);
+				isValid = (clusterId != subpaving.invalidIndex());
+			}
+		});
 }
 
 template <typename TSpeciesEnum>

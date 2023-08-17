@@ -480,6 +480,14 @@ public:
 	 */
 	virtual std::string
 	getFluxDepthProfileFilePath() const = 0;
+
+	/**
+	 * Obtain the value of the dislocation density.
+	 *
+	 * @return The value of the density
+	 */
+	virtual double
+	getDislocationDensity() const = 0;
 };
 // end class IOptions
 } /* namespace options */

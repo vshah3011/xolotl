@@ -336,6 +336,12 @@ public:
 		return asDerived()->checkLargestClusterId();
 	}
 
+	IndexType
+	getDisloDensityId() override
+	{
+		return getClusterDataMirror().DisloId();
+	}
+
 	Bounds
 	getAllClusterBounds() override;
 
@@ -695,6 +701,7 @@ protected:
 	std::map<std::string, SpeciesId> _speciesLabelMap;
 
 	ConnectivitiesView _constantConns;
+	Kokkos::View<IndexType*> _connEntries;
 
 	double _currentTime;
 };

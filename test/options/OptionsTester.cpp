@@ -125,6 +125,7 @@ BOOST_AUTO_TEST_CASE(goodParamFile)
 		<< "fissionYield=0.3" << std::endl
 		<< "heVRatio=5.0" << std::endl
 		<< "migrationThreshold=1.0" << std::endl
+		<< "disloDensity=0.5" << std::endl
 		<< "fluxDepthProfileFilePath=path/to/the/flux/profile/file.txt"
 		<< std::endl;
 	goodParamFile.close();
@@ -228,6 +229,9 @@ BOOST_AUTO_TEST_CASE(goodParamFile)
 
 	// Check the migration threshold option
 	BOOST_REQUIRE_EQUAL(opts.getMigrationThreshold(), 1.0);
+
+	// Check the initial dislocation density option
+	BOOST_REQUIRE_EQUAL(opts.getDislocationDensity(), 0.5);
 
 	// Check the network filename
 	BOOST_REQUIRE_EQUAL(opts.getFluxDepthProfileFilePath(),

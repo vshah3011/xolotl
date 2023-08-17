@@ -281,6 +281,11 @@ protected:
 	 */
 	fs::path fluxDepthProfileFilePath;
 
+	/**
+	 * Dislocation density
+	 */
+	double dislocationDensity;
+
 public:
 	/**
 	 * The constructor.
@@ -808,6 +813,15 @@ public:
 	getFluxDepthProfileFilePath() const override
 	{
 		return fluxDepthProfileFilePath.string();
+	}
+
+	/**
+	 * \see IOptions.h
+	 */
+	virtual double
+	getDislocationDensity() const override
+	{
+		return dislocationDensity;
 	}
 };
 // end class Options

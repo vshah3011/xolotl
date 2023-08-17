@@ -317,6 +317,9 @@ public:
 	virtual IndexType
 	getLargestClusterId() = 0;
 
+	virtual IndexType
+	getDisloDensityId() = 0;
+
 	/**
 	 * @brief Returns an object representing the the bounds of each
 	 * cluster in each dimension of the phase space.

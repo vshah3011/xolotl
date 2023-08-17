@@ -1529,6 +1529,7 @@ ReactionNetworkWorker<TImpl>::defineReactions(Connectivity& connectivity)
 	generator.setConstantConnectivities(_nw._constantConns);
 	_nw._reactions = generator.generateReactions();
 	connectivity = generator.getConnectivity();
+	_nw.asDerived()->setConnectivity(connectivity);
 }
 
 template <typename TImpl>

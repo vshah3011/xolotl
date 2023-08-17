@@ -35,6 +35,12 @@ public:
 	IndexType
 	checkLargestClusterId();
 
+	KOKKOS_INLINE_FUNCTION
+	void
+	setConnectivity(Connectivity)
+	{
+	}
+
 private:
 	double
 	checkLatticeParameter(double latticeParameter);

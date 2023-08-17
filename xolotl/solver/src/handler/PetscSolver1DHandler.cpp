@@ -145,12 +145,12 @@ PetscSolver1DHandler::createSolverContext(DM& da)
 	// TODO: do we need the ghost points?
 	network.setGridSize(localXM + 2);
 
-	// Get the diagonal fill
-	auto nPartials = network.getDiagonalFill(dfill);
-
 	// The soret initialization needs to be done after the network
 	// because it adds connectivities the network would remove
 	soretDiffusionHandler->initialize(network, ofill, dfill, grid, localXS);
+
+	// Get the diagonal fill
+	auto nPartials = network.getDiagonalFill(dfill);
 
 	// Load up the block fills
 	auto dfillsparse = ConvertToPetscSparseFillMap(dof + 1, dfill);
@@ -257,6 +257,9 @@ PetscSolver1DHandler::initializeConcentration(
 				for (auto pair : initialConc) {
 					concOffset[pair.first] = pair.second;
 				}
+				// Dislocation density
+				auto disloId = network.getDisloDensityId();
+				concOffset[disloId] = disloDen;
 			}
 		}
 

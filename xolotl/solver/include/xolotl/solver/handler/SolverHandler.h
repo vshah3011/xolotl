@@ -166,6 +166,9 @@ protected:
 	//! The ratio of He per V in a bubble.
 	double heVRatio;
 
+	//! The initial dislocation density.
+	double disloDen;
+
 	//! The value to use to seed the random number generator.
 	unsigned int rngSeed;
 

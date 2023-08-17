@@ -196,8 +196,10 @@ ReactionGeneratorBase<TNetwork, TDerived>::generateConnectivity(
 			DEVICE_LAMBDA(
 				auto&& reaction) { reaction.contributeConnectivity(tmpConn); });
 	}
-
 	Kokkos::fence();
+
+	this->asDerived()->addConnectivity(tmpConn);
+
 	// Get row map
 	auto counts = tmpConn.row_map;
 	auto nEntries =
@@ -241,6 +243,8 @@ ReactionGeneratorBase<TNetwork, TDerived>::generateConnectivity(
 				auto&& reaction) { reaction.contributeConnectivity(tmpConn); });
 	}
 	Kokkos::fence();
+
+	this->asDerived()->addConnectivity(tmpConn);
 
 	// Shrink to fit
 	Connectivity connectivity;

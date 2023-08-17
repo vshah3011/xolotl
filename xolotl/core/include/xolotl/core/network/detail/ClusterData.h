@@ -144,8 +144,8 @@ private:
 	};
 
 	enum IntValsIndex : int
-	{ 
-	    DISLO_ID = 0,
+	{
+		DISLO_ID = 0,
 		HELIUM_DISLO_ID,
 		HELIUM_GB_ID,
 		NUM_INT_VALS
@@ -224,7 +224,7 @@ public:
 	{
 		setVal(_floatVals, ZETA, val);
 	}
-	
+
 	KOKKOS_INLINE_FUNCTION
 	IndexType
 	DisloId() const
@@ -237,7 +237,6 @@ public:
 	{
 		setVal(_intVals, DISLO_ID, val);
 	}
-
 
 	KOKKOS_INLINE_FUNCTION
 	IndexType

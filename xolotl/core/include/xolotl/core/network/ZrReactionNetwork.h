@@ -49,6 +49,12 @@ public:
 	void
 	initializeExtraClusterData(const options::IOptions& options);
 
+	KOKKOS_INLINE_FUNCTION
+	void
+	setConnectivity(Connectivity)
+	{
+	}
+
 private:
 	double
 	checkLatticeParameter(double latticeParameter);
@@ -66,9 +72,6 @@ private:
 
 	detail::ZrReactionGenerator
 	getReactionGenerator() const noexcept;
-
-	void
-	defineReactions(Connectivity& connectivity);
 };
 
 namespace detail

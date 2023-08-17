@@ -54,6 +54,7 @@ SolverHandler::SolverHandler(
 	burstingFactor(0.1),
 	rngSeed(0),
 	heVRatio(4.0),
+	disloDen(0.0),
 	previousTime(0.0),
 	nXeGB(0.0),
 	gridType(""),
@@ -503,6 +504,9 @@ SolverHandler::initializeHandlers(core::material::IMaterialHandler* material,
 
 	// Set the HeV ratio
 	heVRatio = opts.getHeVRatio();
+
+	// Set the initial dislocation density
+	disloDen = opts.getDislocationDensity();
 
 	// Which type of temperature grid to use
 	if (opts.getTempHandlerName() == "heat" or

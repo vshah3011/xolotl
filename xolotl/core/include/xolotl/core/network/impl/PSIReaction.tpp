@@ -309,7 +309,7 @@ KOKKOS_INLINE_FUNCTION
 double
 PSIDisloSinkReaction<TSpeciesEnum>::getSinkStrength()
 {
-    constexpr double pi = ::xolotl::core::pi;
+	constexpr double pi = ::xolotl::core::pi;
 	double grainSize = 50000.0; // 50 um
 	return 1.0 / (pi * grainSize * grainSize);
 }
@@ -324,8 +324,8 @@ PSIDisloSinkReaction<TSpeciesEnum>::computeRate(
 	double dc = cl.getDiffusionCoefficient(gridIndex);
 
 	// Define the dislocation density
-	double disl = 1E-6;   // #/nm-2
- 
+	double disl = 1E-6; // #/nm-2
+
 	// Dislocation sink strength
 	double disl_strength = this->asDerived()->getSinkBias() * disl * dc;
 

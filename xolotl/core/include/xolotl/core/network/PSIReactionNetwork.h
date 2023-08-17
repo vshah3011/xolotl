@@ -43,6 +43,7 @@ public:
 	using IndexType = typename Superclass::IndexType;
 	using ConcentrationsView = typename Superclass::ConcentrationsView;
 	using FluxesView = typename Superclass::FluxesView;
+	using Connectivity = typename Superclass::Connectivity;
 
 	using Superclass::Superclass;
 
@@ -134,6 +135,9 @@ public:
 	updateDesorptionLeftSideRate(
 		ConcentrationsView concentrations, IndexType gridIndex);
 
+	KOKKOS_INLINE_FUNCTION
+	void setConnectivity(Connectivity);
+
 private:
 	double
 	checkLatticeParameter(double latticeParameter);
@@ -154,6 +158,25 @@ private:
 		return detail::PSIReactionGenerator<Species>{*this};
 	}
 
+	KOKKOS_INLINE_FUNCTION
+	double
+	getClimbVelocity(ConcentrationsView concentrations, IndexType gridIndex);
+
+	KOKKOS_INLINE_FUNCTION
+	double
+	getClimbVelocityPartialRho(
+		ConcentrationsView concentrations, IndexType gridIndex);
+
+	KOKKOS_INLINE_FUNCTION
+	double
+	getClimbVelocityPartialV(
+		ConcentrationsView concentrations, IndexType gridIndex);
+
+	KOKKOS_INLINE_FUNCTION
+	double
+	getClimbVelocityPartialI(ConcentrationsView concentrations,
+		IndexType gridIndex, IndexType clusterId);
+
 private:
 	std::unique_ptr<detail::TrapMutationHandler> _tmHandler;
 };
@@ -173,6 +196,7 @@ public:
 	using Subpaving = typename NetworkType::Subpaving;
 	using IndexType = typename NetworkType::IndexType;
 	using AmountType = typename NetworkType::AmountType;
+	using Connectivity = typename NetworkType::Connectivity;
 
 	using Superclass = ReactionGenerator<PSIReactionNetwork<TSpeciesEnum>,
 		PSIReactionGenerator<TSpeciesEnum>>;
@@ -188,6 +212,9 @@ public:
 	KOKKOS_INLINE_FUNCTION
 	void
 	addSinks(IndexType i, TTag tag) const;
+
+	void
+	addConnectivity(Connectivity& conn);
 
 private:
 	ReactionCollection<NetworkType>
