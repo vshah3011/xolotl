@@ -106,5 +106,17 @@ constexpr double tungstenDensity = 62.8;
 // Network dislocation density initial in nm^-2
 constexpr double rho_d = 1E-6;
 
+// Shear Modulus Tungsten in N/nm2
+constexpr double G_W = 1.6E29;  
+
+// Burgers vector Tungsten in nm
+constexpr double B_W = 0.274;
+
+// Tungsten atomic volume in nm
+constexpr double atvol = 0.0158;
+
+// Boltzman constant in eV/K (Repeated)
+constexpr double kb = 8.61733240000000000E-5;
+
 } /* end namespace core */
 } /* end namespace xolotl */
