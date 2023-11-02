@@ -107,7 +107,7 @@ constexpr double tungstenDensity = 62.8;
 constexpr double rho_d = 1E-6;
 
 // Shear Modulus Tungsten in N/nm2
-constexpr double G_W = 1.6E29;  
+constexpr double G_W = 1.6E-7;  
 
 // Burgers vector Tungsten in nm
 constexpr double B_W = 0.274;

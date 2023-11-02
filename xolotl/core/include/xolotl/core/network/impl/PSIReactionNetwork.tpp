@@ -250,11 +250,12 @@ PSIReactionNetwork<TSpeciesEnum>::getClimbVelocity(
 	// Get the temperature
 	double temperature = this->_clusterData.d_view().temperature(gridIndex);
 	// Compute C_eq
-	double concVEq = 0;       // Need to change this based on temperature
+	double concVEq = 1e-10;       // Need to change this based on temperature
 	// Compute C_V^n
 	auto disloDensity = concentrations(disloId);
 	double sigma = 0.4*G_W*B_W*sqrt(0.1*disloDensity);  //Back stress value
 	double concVN = concVEq*exp(sigma*atvol/(kb*temperature)); // Vacancy conc in equilibrium
+	//sigma*atvol
 
 	// Access the concentrations and diffusion coefficients
 	double toReturn = 0.0;
