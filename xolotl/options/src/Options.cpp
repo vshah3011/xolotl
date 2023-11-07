@@ -182,7 +182,7 @@ Options::readParams(int argc, const char* argv[])
 		bpo::value<std::string>(),
 		"List of all the processes to use in the simulation (reaction, diff, "
 		"advec, modifiedTM, movingSurface, bursting, attenuation, resolution, "
-		"heterogeneous, sink, soret, constant, noSolve).")("grain",
+		"heterogeneous, sink, soret, constant, noSolve, dislocation).")("grain",
 		bpo::value<std::string>(&gbList),
 		"This option allows the user to add GB in the X, Y, or Z directions. "
 		"To do so, simply write the direction followed "
@@ -390,6 +390,7 @@ Options::readParams(int argc, const char* argv[])
 		processMap["soret"] = false;
 		processMap["constant"] = false;
 		processMap["noSolve"] = false;
+		processMap["dislocation"] = false;
 
 		// Loop on the tokens
 		for (int i = 0; i < tokens.size(); ++i) {

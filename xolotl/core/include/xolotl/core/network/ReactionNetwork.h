@@ -233,6 +233,9 @@ public:
 	setEnableReducedJacobian(bool reduced) override;
 
 	void
+	setEnableDislocation(bool dislo) override;
+
+	void
 	setGridSize(IndexType gridSize) override;
 
 	void

@@ -531,8 +531,9 @@ PetscMonitor1D::setup(int loop)
 					outputFile << speciesName << "_surface ";
 				}
 			}
-			outputFile
-				<< "Helium_burst Deuterium_burst Tritium_burst Disl_dens ";
+			outputFile << "Helium_burst Deuterium_burst Tritium_burst ";
+			if (_solverHandler->isDislocation())
+				outputFile << "Disl_dens ";
 			if (_solverHandler->isSink())
 				outputFile << "He_dislo He_GB";
 			outputFile << std::endl;
@@ -977,12 +978,14 @@ PetscMonitor1D::computeHeliumRetention(
 	ierr = DMDAVecGetArrayDOFRead(da, localSolution, &solutionArray);
 	CHKERRQ(ierr);
 
-	// Check if we are using the sinks
+	// Check if we are using the sinks and or dislocation evolution
 	auto isSink = _solverHandler->isSink();
+	auto isDislo = _solverHandler->isDislocation();
 	// Store the concentration over the grid
 	auto numSpecies = network.getSpeciesListSize();
 	auto specIdI = network.getInterstitialSpeciesId();
-	auto myConcData = std::vector<double>(numSpecies + 1 + 2 * isSink, 0.0);
+	auto myConcData =
+		std::vector<double>(numSpecies + 1 * isDislo + 2 * isSink, 0.0);
 
 	// Declare the pointer for the concentrations at a specific grid point
 	PetscReal* gridPointSolution;
@@ -1018,13 +1021,23 @@ PetscMonitor1D::computeHeliumRetention(
 			myConcData[id()] += totals[id()] * hx;
 		}
 		// Summed over 1d profile as of now
-		myConcData[numSpecies] +=
-			gridPointSolution[dof - 3] * hx; // Dislocation density
-		if (isSink) {
+		if (isSink and isDislo) {
+			myConcData[numSpecies] +=
+				gridPointSolution[dof - 3] * hx; // Dislocation density
 			myConcData[numSpecies + 1] +=
 				gridPointSolution[dof - 2] * hx; // He dislo
 			myConcData[numSpecies + 2] +=
 				gridPointSolution[dof - 1] * hx; // He GB
+		}
+		else if (isSink) {
+			myConcData[numSpecies] +=
+				gridPointSolution[dof - 2] * hx; // He dislo
+			myConcData[numSpecies + 1] +=
+				gridPointSolution[dof - 1] * hx; // He GB
+		}
+		else if (isDislo) {
+			myConcData[numSpecies] +=
+				gridPointSolution[dof - 1] * hx; // Dislocation density
 		}
 	}
 
@@ -1253,10 +1266,18 @@ PetscMonitor1D::computeHeliumRetention(
 		}
 		auto tempHandler = _solverHandler->getTemperatureHandler();
 		outputFile << _nHeliumBurst << " " << _nDeuteriumBurst << " "
-				   << _nTritiumBurst << " " << totalConcData[numSpecies] << " ";
-		if (isSink) {
-			outputFile << totalConcData[numSpecies + 1] << " "
+				   << _nTritiumBurst << " ";
+		if (isSink and isDislo) {
+			outputFile << totalConcData[numSpecies] << " "
+					   << totalConcData[numSpecies + 1] << " "
 					   << totalConcData[numSpecies + 2];
+		}
+		else if (isSink) {
+			outputFile << totalConcData[numSpecies] << " "
+					   << totalConcData[numSpecies + 1];
+		}
+		else if (isDislo) {
+			outputFile << totalConcData[numSpecies];
 		}
 		outputFile << std::endl;
 		outputFile.close();

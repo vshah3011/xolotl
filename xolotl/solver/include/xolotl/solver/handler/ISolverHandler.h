@@ -428,6 +428,14 @@ public:
 	isSink() const = 0;
 
 	/**
+	 * To know if the dislocation density evolution is used.
+	 *
+	 * @return True if dislo evolution used.
+	 */
+	virtual bool
+	isDislocation() const = 0;
+
+	/**
 	 * To know if a temporal profile is used for the flux.
 	 *
 	 * @return True if temporal flux option is used.

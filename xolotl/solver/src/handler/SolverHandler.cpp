@@ -37,6 +37,7 @@ SolverHandler::SolverHandler(
 	movingSurface(false),
 	bubbleBursting(false),
 	enabledSink(false),
+	enabledDislo(false),
 	isMirror(true),
 	isRobin(false),
 	useAttenuation(false),
@@ -540,6 +541,8 @@ SolverHandler::initializeHandlers(core::material::IMaterialHandler* material,
 	bubbleBursting = map["bursting"];
 	// Are sinks used?
 	enabledSink = map["sink"];
+	// Is dislocation evolution used?
+	enabledDislo = map["dislocation"];
 	// Should we be able to attenuate the modified trap mutation?
 	useAttenuation = map["attenuation"];
 

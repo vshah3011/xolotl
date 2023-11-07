@@ -257,9 +257,11 @@ PetscSolver1DHandler::initializeConcentration(
 				for (auto pair : initialConc) {
 					concOffset[pair.first] = pair.second;
 				}
-				// Dislocation density
-				auto disloId = network.getDisloDensityId();
-				concOffset[disloId] = disloDen;
+				if (isDislocation()) {
+					// Dislocation density
+					auto disloId = network.getDisloDensityId();
+					concOffset[disloId] = disloDen;
+				}
 			}
 		}
 

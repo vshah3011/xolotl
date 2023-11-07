@@ -52,6 +52,7 @@ ReactionNetwork<TImpl>::ReactionNetwork(const Subpaving& subpaving,
 	this->setEnableTrapMutation(map["modifiedTM"]);
 	this->setEnableAttenuation(map["attenuation"]);
 	this->setEnableConstantReaction(map["constant"]);
+	this->setEnableDislocation(map["dislocation"]);
 	std::string petscString = opts.getPetscArg();
 	auto tokens = util::Tokenizer<>{petscString}();
 	bool useReduced = false;
@@ -238,6 +239,14 @@ void
 ReactionNetwork<TImpl>::setEnableReducedJacobian(bool reduced)
 {
 	this->_enableReducedJacobian = reduced;
+}
+
+template <typename TImpl>
+void
+ReactionNetwork<TImpl>::setEnableDislocation(bool dislo)
+{
+	this->_enableDislocation = dislo;
+	_clusterData.h_view().setEnableDislocation(this->_enableDislocation);
 }
 
 template <typename TImpl>

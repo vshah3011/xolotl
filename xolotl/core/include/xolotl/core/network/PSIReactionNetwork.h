@@ -169,8 +169,8 @@ private:
 
 	KOKKOS_INLINE_FUNCTION
 	double
-	getClimbVelocityPartialV(
-		ConcentrationsView concentrations, IndexType gridIndex, IndexType clusterId);
+	getClimbVelocityPartialV(ConcentrationsView concentrations,
+		IndexType gridIndex, IndexType clusterId);
 
 	KOKKOS_INLINE_FUNCTION
 	double

@@ -65,20 +65,20 @@ void
 PSIReactionNetwork<TSpeciesEnum>::initializeExtraDOFs(
 	const options::IOptions& options)
 {
-	this->_clusterData.h_view().setDisloId(this->_numDOFs);
-	this->_numDOFs += 1;
-
-	if (!this->_enableSink) {
+	if (this->_enableDislocation) {
+		this->_clusterData.h_view().setDisloId(this->_numDOFs);
+		this->_numDOFs += 1;
 		this->copyClusterDataView();
 		this->invalidateDataMirror();
-		return;
 	}
 
-	this->_clusterData.h_view().setHeliumDisloId(this->_numDOFs);
-	this->_clusterData.h_view().setHeliumGBId(this->_numDOFs + 1);
-	this->_numDOFs += 2;
-	this->copyClusterDataView();
-	this->invalidateDataMirror();
+	if (this->_enableSink) {
+		this->_clusterData.h_view().setHeliumDisloId(this->_numDOFs);
+		this->_clusterData.h_view().setHeliumGBId(this->_numDOFs + 1);
+		this->_numDOFs += 2;
+		this->copyClusterDataView();
+		this->invalidateDataMirror();
+	}
 }
 
 template <typename TSpeciesEnum>
@@ -179,6 +179,9 @@ void
 PSIReactionNetwork<TSpeciesEnum>::setConnectivity(
 	typename PSIReactionNetwork<TSpeciesEnum>::Connectivity conn)
 {
+	if (!this->_enableDislocation)
+		return;
+
 	// Count
 	IndexType nPartials = 1; // For the dislocation density
 
@@ -250,12 +253,14 @@ PSIReactionNetwork<TSpeciesEnum>::getClimbVelocity(
 	// Get the temperature
 	double temperature = this->_clusterData.d_view().temperature(gridIndex);
 	// Compute C_eq
-	double concVEq = 1e-10;       // Need to change this based on temperature
+	double concVEq = 1e-10; // Need to change this based on temperature
 	// Compute C_V^n
 	auto disloDensity = concentrations(disloId);
-	double sigma = 0.4*G_W*B_W*sqrt(0.1*disloDensity);  //Back stress value
-	double concVN = concVEq*exp(sigma*atvol/(kb*temperature)); // Vacancy conc in equilibrium
-	//sigma*atvol
+	double sigma =
+		0.4 * G_W * B_W * sqrt(0.1 * disloDensity); // Back stress value
+	double concVN = concVEq *
+		exp(sigma * atvol / (kb * temperature)); // Vacancy conc in equilibrium
+	// sigma*atvol
 
 	// Access the concentrations and diffusion coefficients
 	double toReturn = 0.0;
@@ -267,8 +272,8 @@ PSIReactionNetwork<TSpeciesEnum>::getClimbVelocity(
 		auto diffCoef = this->_clusterData.d_view()
 							.getCluster(clusterId)
 							.getDiffusionCoefficient(gridIndex);
-		toReturn -=
-			(concentrations(clusterId) - concVN) * diffCoef*1.0; // Z is hard coded
+		toReturn -= (concentrations(clusterId) - concVN) * diffCoef *
+			1.0; // Z is hard coded
 	}
 
 	// Interstitials
@@ -280,15 +285,16 @@ PSIReactionNetwork<TSpeciesEnum>::getClimbVelocity(
 		auto diffCoef = this->_clusterData.d_view()
 							.getCluster(clusterId)
 							.getDiffusionCoefficient(gridIndex);
-		toReturn += concentrations(clusterId) * diffCoef*1.2; // Z is hard coded
+		toReturn +=
+			concentrations(clusterId) * diffCoef * 1.2; // Z is hard coded
 		comp[Species::I]++;
 		clusterId = subpaving.findTileId(comp);
 		isValid = (clusterId != subpaving.invalidIndex());
 	}
-  
-    double vcl = 0.0;
-    vcl = (2*pi)/(B_W*log(2*pi))*toReturn; // Climb velocity
-	return vcl; 
+
+	double vcl = 0.0;
+	vcl = (2 * pi) / (B_W * log(2 * pi)) * toReturn; // Climb velocity
+	return vcl;
 }
 
 template <typename TSpeciesEnum>
@@ -297,28 +303,28 @@ double
 PSIReactionNetwork<TSpeciesEnum>::getClimbVelocityPartialRho(
 	ConcentrationsView concentrations, IndexType gridIndex)
 {
-    auto subpaving = this->_subpaving;
-    // Expression will be - 4*pi*a / b*x*ln(x)*ln(x)
-    // a is the entire term and x is the dislocation density and b is the burgers
-    // Check with Sophie --> If approximated as 2pi then it is zero
-    
-    double holder = 0.0;
-    
-    // Single Vacancy
-    Composition comp = Composition::zero();
+	auto subpaving = this->_subpaving;
+	// Expression will be - 4*pi*a / b*x*ln(x)*ln(x)
+	// a is the entire term and x is the dislocation density and b is the
+	// burgers Check with Sophie --> If approximated as 2pi then it is zero
+
+	double holder = 0.0;
+
+	// Single Vacancy
+	Composition comp = Composition::zero();
 	comp[Species::V] = 1;
 	auto clusterId = subpaving.findTileId(comp);
-    
-    auto cl = this->_clusterData.d_view().getCluster(clusterId);
+
+	auto cl = this->_clusterData.d_view().getCluster(clusterId);
 	double dc = cl.getDiffusionCoefficient(gridIndex);
-	
+
 	auto disloId = this->_clusterData.d_view().DisloId();
 	auto disloDensity = concentrations(disloId);
 
-	//holder = (4*pi*a)/(B_W*log(disloDensity)*log(disloDensity)); 
-	
-	holder = 0.0;       // If the geometric factor is taken as 2 pi
-	
+	// holder = (4*pi*a)/(B_W*log(disloDensity)*log(disloDensity));
+
+	holder = 0.0; // If the geometric factor is taken as 2 pi
+
 	return holder;
 }
 
@@ -328,24 +334,24 @@ double
 PSIReactionNetwork<TSpeciesEnum>::getClimbVelocityPartialV(
 	ConcentrationsView concentrations, IndexType gridIndex, IndexType clusterId)
 {
-    //auto subpaving = this->_subpaving;
-    // Derivative expression will be: 4*pi*s*a/ln(a)*b
-    // a is the dislocation density, a and s are the diffusion and bias
-    // Add here
-    double holder = 0.0;
-    
-    // Single Vacancy
-    //Composition comp = Composition::zero();
-	//comp[Species::V] = 1;
-	//auto clusterId = subpaving.findTileId(comp);
-    
-    auto cl = this->_clusterData.d_view().getCluster(clusterId);
+	// auto subpaving = this->_subpaving;
+	//  Derivative expression will be: 4*pi*s*a/ln(a)*b
+	//  a is the dislocation density, a and s are the diffusion and bias
+	//  Add here
+	double holder = 0.0;
+
+	// Single Vacancy
+	// Composition comp = Composition::zero();
+	// comp[Species::V] = 1;
+	// auto clusterId = subpaving.findTileId(comp);
+
+	auto cl = this->_clusterData.d_view().getCluster(clusterId);
 	double dc = cl.getDiffusionCoefficient(gridIndex);
-	
+
 	auto disloId = this->_clusterData.d_view().DisloId();
 	auto disloDensity = concentrations(disloId);
-    
-    holder  = (4*pi*1.0*dc)/(log(disloDensity)*B_W);
+
+	holder = (4 * pi * 1.0 * dc) / (log(disloDensity) * B_W);
 	return holder;
 }
 
@@ -355,26 +361,25 @@ double
 PSIReactionNetwork<TSpeciesEnum>::getClimbVelocityPartialI(
 	ConcentrationsView concentrations, IndexType gridIndex, IndexType clusterId)
 {
-    //auto subpaving = this->_subpaving;
-    // Derivative expression will be: 4*pi*s*v/ln(a)*b
-    // a is the dislocation density, s and v are the diffusion and bias
-	// Add here
+	// auto subpaving = this->_subpaving;
+	//  Derivative expression will be: 4*pi*s*v/ln(a)*b
+	//  a is the dislocation density, s and v are the diffusion and bias
+	//  Add here
 	double holder = 0.0;
-	
+
 	// Single Interstitial
-	//Composition comp = Composition::zero();
-	//comp[Species::I] = 1;
-	//auto clusterId = subpaving.findTileId(comp);
-	
+	// Composition comp = Composition::zero();
+	// comp[Species::I] = 1;
+	// auto clusterId = subpaving.findTileId(comp);
 
 	//
 	auto cl = this->_clusterData.d_view().getCluster(clusterId);
 	double dc = cl.getDiffusionCoefficient(gridIndex);
-	
+
 	auto disloId = this->_clusterData.d_view().DisloId();
 	auto disloDensity = concentrations(disloId);
-	
-	holder = (4*pi*1.2*dc)/(log(disloDensity)*B_W);
+
+	holder = (4 * pi * 1.2 * dc) / (log(disloDensity) * B_W);
 
 	return holder;
 }
@@ -385,22 +390,25 @@ PSIReactionNetwork<TSpeciesEnum>::computeFluxesPreProcess(
 	ConcentrationsView concentrations, FluxesView fluxes, IndexType gridIndex,
 	double surfaceDepth, double spacing)
 {
-	// Equation for dislocation density
-	Kokkos::parallel_for(
-		"PSIReactionNetwork::computeFluxesPreProcess", 1,
-		KOKKOS_LAMBDA(IndexType i) {
-			// TODO: implement beta
-			double beta = 2*pow(pi,1.5) - pow(pi,0.5); // Change the Pi
-			double nu_cl = getClimbVelocity(concentrations, gridIndex);
-			auto disloId = this->_clusterData.d_view().DisloId();
-			auto disloDensity = concentrations(disloId);
-			fluxes[disloId] += beta * nu_cl * pow(disloDensity, 1.5);
-		});
+	if (this->_enableDislocation) {
+		// Equation for dislocation density
+		Kokkos::parallel_for(
+			"PSIReactionNetwork::computeFluxesPreProcess", 1,
+			KOKKOS_LAMBDA(IndexType i) {
+				// TODO: implement beta
+				double beta = 2 * pow(pi, 1.5) - pow(pi, 0.5); // Change the Pi
+				double nu_cl = getClimbVelocity(concentrations, gridIndex);
+				auto disloId = this->_clusterData.d_view().DisloId();
+				auto disloDensity = concentrations(disloId);
+				fluxes[disloId] += beta * nu_cl * pow(disloDensity, 1.5);
+			});
+	}
 
 	if (this->_enableTrapMutation) {
 		updateDesorptionLeftSideRate(concentrations, gridIndex);
 		selectTrapMutationReactions(surfaceDepth, spacing);
 	}
+
 	if (this->_enableSink) {
 		// Compute the left side rates
 		auto& clusterData = this->_clusterData.d_view;
@@ -429,57 +437,62 @@ PSIReactionNetwork<TSpeciesEnum>::computePartialsPreProcess(
 	ConcentrationsView concentrations, Kokkos::View<double*> values,
 	IndexType gridIndex, double surfaceDepth, double spacing)
 {
-	// Equation for dislocation density
-	Kokkos::parallel_for(
-		"PSIReactionNetwork::computeFluxesPreProcess", 1,
-		KOKKOS_LAMBDA(IndexType i) {
-			// Get the dislocation density Id
-			auto disloId = this->_clusterData.d_view().DisloId();
-			auto subpaving = this->_subpaving;
-			// TODO: implement beta
-			double beta = 2*pow(pi,1.5) - pow(pi,0.5);
-			// The first contribution is w.r.t. dislocation density
-			auto disloDensity = concentrations(disloId);
-			auto df = beta *
-				(pow(disloDensity, 1.5) *
-						getClimbVelocityPartialRho(concentrations, gridIndex) +
-					1.5 * sqrt(disloDensity) *
-						getClimbVelocity(concentrations, gridIndex));
-			values(this->_connEntries(0)) += df;
-			IndexType nPartials = 1;
+	if (this->_enableDislocation) {
+		// Equation for dislocation density
+		Kokkos::parallel_for(
+			"PSIReactionNetwork::computeFluxesPreProcess", 1,
+			KOKKOS_LAMBDA(IndexType i) {
+				// Get the dislocation density Id
+				auto disloId = this->_clusterData.d_view().DisloId();
+				auto subpaving = this->_subpaving;
+				// TODO: implement beta
+				double beta = 2 * pow(pi, 1.5) - pow(pi, 0.5);
+				// The first contribution is w.r.t. dislocation density
+				auto disloDensity = concentrations(disloId);
+				auto df = beta *
+					(pow(disloDensity, 1.5) *
+							getClimbVelocityPartialRho(
+								concentrations, gridIndex) +
+						1.5 * sqrt(disloDensity) *
+							getClimbVelocity(concentrations, gridIndex));
+				values(this->_connEntries(0)) += df;
+				IndexType nPartials = 1;
 
-			// Single vacancy
-			Composition comp = Composition::zero();
-			comp[Species::V] = 1;
-			auto clusterId = subpaving.findTileId(comp);
-			if (clusterId != subpaving.invalidIndex()) {
-				df = beta * pow(disloDensity, 1.5) *
-					getClimbVelocityPartialV(concentrations, gridIndex, clusterId);
-				values(this->_connEntries(nPartials)) += df;
-				nPartials++;
-			}
+				// Single vacancy
+				Composition comp = Composition::zero();
+				comp[Species::V] = 1;
+				auto clusterId = subpaving.findTileId(comp);
+				if (clusterId != subpaving.invalidIndex()) {
+					df = beta * pow(disloDensity, 1.5) *
+						getClimbVelocityPartialV(
+							concentrations, gridIndex, clusterId);
+					values(this->_connEntries(nPartials)) += df;
+					nPartials++;
+				}
 
-			// Interstitials
-			comp = Composition::zero();
-			comp[Species::I] = 1;
-			clusterId = subpaving.findTileId(comp);
-			bool isValid = (clusterId != subpaving.invalidIndex());
-			while (isValid) {
-				df = beta * pow(disloDensity, 1.5) *
-					getClimbVelocityPartialI(
-						concentrations, gridIndex, clusterId);
-				values(this->_connEntries(nPartials)) += df;
-				nPartials++;
-				comp[Species::I]++;
+				// Interstitials
+				comp = Composition::zero();
+				comp[Species::I] = 1;
 				clusterId = subpaving.findTileId(comp);
-				isValid = (clusterId != subpaving.invalidIndex());
-			}
-		});
+				bool isValid = (clusterId != subpaving.invalidIndex());
+				while (isValid) {
+					df = beta * pow(disloDensity, 1.5) *
+						getClimbVelocityPartialI(
+							concentrations, gridIndex, clusterId);
+					values(this->_connEntries(nPartials)) += df;
+					nPartials++;
+					comp[Species::I]++;
+					clusterId = subpaving.findTileId(comp);
+					isValid = (clusterId != subpaving.invalidIndex());
+				}
+			});
+	}
 
 	if (this->_enableTrapMutation) {
 		updateDesorptionLeftSideRate(concentrations, gridIndex);
 		selectTrapMutationReactions(surfaceDepth, spacing);
 	}
+
 	if (this->_enableSink) {
 		// Compute the left side rates
 		auto& clusterData = this->_clusterData.d_view;

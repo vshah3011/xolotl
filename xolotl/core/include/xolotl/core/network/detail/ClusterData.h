@@ -159,6 +159,7 @@ private:
 		SINK,
 		TRAP_MUTATION,
 		CONSTANT_REACTION,
+		DISLOCATION,
 		NUM_BOOL_VALS
 	};
 
@@ -340,6 +341,19 @@ public:
 	setEnableConstantReaction(bool val)
 	{
 		setVal(_boolVals, CONSTANT_REACTION, val);
+	}
+
+	KOKKOS_INLINE_FUNCTION
+	bool
+	enableDislocation() const
+	{
+		return _boolVals[DISLOCATION];
+	}
+
+	void
+	setEnableDislocation(bool val)
+	{
+		setVal(_boolVals, DISLOCATION, val);
 	}
 
 private:

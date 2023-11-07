@@ -276,6 +276,18 @@ public:
 		_enableReducedJacobian = reduced;
 	}
 
+	bool
+	getEnableDislocation() const noexcept
+	{
+		return _enableDislocation;
+	}
+
+	virtual void
+	setEnableDislocation(bool dislo)
+	{
+		_enableDislocation = dislo;
+	}
+
 	IndexType
 	getGridSize() const noexcept
 	{
@@ -535,6 +547,7 @@ protected:
 	bool _enableAttenuation{};
 	bool _enableConstantReaction{};
 	bool _enableReducedJacobian{};
+	bool _enableDislocation{};
 
 	IndexType _gridSize{};
 	IndexType _numDOFs{};
