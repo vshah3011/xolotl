@@ -132,7 +132,12 @@ PSIReactionNetwork<TSpeciesEnum>::updateExtraClusterData(
 		using SinkReactionType = typename Superclass::Traits::SinkReactionType;
 		auto sinkReactions =
 			this->_reactions.template getView<SinkReactionType>();
-		this->_clusterData.h_view().extraData.initialize(sinkReactions.size());
+		using GBSinkReactionType =
+			typename Superclass::Traits::GBSinkReactionType;
+		auto gbSinkReactions =
+			this->_reactions.template getView<GBSinkReactionType>();
+		this->_clusterData.h_view().extraData.initialize(
+			sinkReactions.size() + gbSinkReactions.size());
 
 		this->copyClusterDataView();
 
@@ -142,6 +147,12 @@ PSIReactionNetwork<TSpeciesEnum>::updateExtraClusterData(
 			KOKKOS_LAMBDA(IndexType i) {
 				clusterData().extraData.sinkMap(i) =
 					sinkReactions(i).getReactantId();
+			});
+		Kokkos::parallel_for(
+			"PSIReactionNetwork::updateExtraClusterData",
+			gbSinkReactions.size(), KOKKOS_LAMBDA(IndexType i) {
+				clusterData().extraData.sinkMap(i + sinkReactions.size()) =
+					gbSinkReactions(i).getReactantId();
 			});
 
 		this->invalidateDataMirror();
@@ -428,6 +439,15 @@ PSIReactionNetwork<TSpeciesEnum>::computeFluxesPreProcess(
 		Kokkos::parallel_for(
 			"PSIReactionNetwork::computeFluxesPreProcess", sinkReactions.size(),
 			KOKKOS_LAMBDA(IndexType i) { sinkReactions[i].updateRates(); });
+
+		using GBSinkReactionType =
+			typename Superclass::Traits::GBSinkReactionType;
+		auto gbSinkReactions =
+			this->_reactions.template getView<GBSinkReactionType>();
+		Kokkos::parallel_for(
+			"PSIReactionNetwork::computeFluxesPreProcess",
+			gbSinkReactions.size(),
+			KOKKOS_LAMBDA(IndexType i) { gbSinkReactions[i].updateRates(); });
 	}
 }
 
@@ -513,6 +533,15 @@ PSIReactionNetwork<TSpeciesEnum>::computePartialsPreProcess(
 			"PSIReactionNetwork::computePartialsPreProcess",
 			sinkReactions.size(),
 			KOKKOS_LAMBDA(IndexType i) { sinkReactions[i].updateRates(); });
+
+		using GBSinkReactionType =
+			typename Superclass::Traits::GBSinkReactionType;
+		auto gbSinkReactions =
+			this->_reactions.template getView<GBSinkReactionType>();
+		Kokkos::parallel_for(
+			"PSIReactionNetwork::computePartialsPreProcess",
+			gbSinkReactions.size(),
+			KOKKOS_LAMBDA(IndexType i) { gbSinkReactions[i].updateRates(); });
 	}
 }
 
