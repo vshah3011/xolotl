@@ -261,17 +261,22 @@ PSIReactionNetwork<TSpeciesEnum>::getClimbVelocity(
 	// Implementation of dislocation density
 	auto disloId = this->_clusterData.d_view().DisloId();
 	auto subpaving = this->_subpaving;
+	double omega = this->_clusterData.d_view().atomicVolume();
+	constexpr double k_B = ::xolotl::core::kBoltzmann;
+	
 	// Get the temperature
 	double temperature = this->_clusterData.d_view().temperature(gridIndex);
+	
 	// Compute C_eq
-	double concVEq = 1e-10; // Need to change this based on temperature
+	double concVEq = exp(-9.46/(k_B*temperature))/omega;
+	
 	// Compute C_V^n
 	auto disloDensity = concentrations(disloId);
 	double sigma =
 		0.4 * G_W * B_W * sqrt(0.1 * disloDensity); // Back stress value
-	double concVN = concVEq *
-		exp(sigma * atvol / (kb * temperature)); // Vacancy conc in equilibrium
-	// sigma*atvol
+	double concVN = concVEq *exp(sigma * omega / (k_B * temperature)); // Vacancy conc in equilibrium
+  
+
 
 	// Access the concentrations and diffusion coefficients
 	double toReturn = 0.0;
@@ -307,6 +312,7 @@ PSIReactionNetwork<TSpeciesEnum>::getClimbVelocity(
 	vcl = (2 * pi) / (B_W * log(2 * pi)) * toReturn; // Climb velocity
 	return vcl;
 }
+
 
 template <typename TSpeciesEnum>
 KOKKOS_INLINE_FUNCTION
@@ -366,34 +372,36 @@ PSIReactionNetwork<TSpeciesEnum>::getClimbVelocityPartialV(
 	return holder;
 }
 
-template <typename TSpeciesEnum>
+ template <typename TSpeciesEnum>
 KOKKOS_INLINE_FUNCTION
-double
+ double
 PSIReactionNetwork<TSpeciesEnum>::getClimbVelocityPartialI(
-	ConcentrationsView concentrations, IndexType gridIndex, IndexType clusterId)
-{
+ 	ConcentrationsView concentrations, IndexType gridIndex, IndexType clusterId)
+ {
 	// auto subpaving = this->_subpaving;
-	//  Derivative expression will be: 4*pi*s*v/ln(a)*b
-	//  a is the dislocation density, s and v are the diffusion and bias
+ 	//  Derivative expression will be: 4*pi*s*v/ln(a)*b
+ 	//  a is the dislocation density, s and v are the diffusion and bias
 	//  Add here
-	double holder = 0.0;
+ 	double holder = 0.0;
 
-	// Single Interstitial
+ 	// Single Interstitial
 	// Composition comp = Composition::zero();
-	// comp[Species::I] = 1;
-	// auto clusterId = subpaving.findTileId(comp);
+ 	// comp[Species::I] = 1;
+ 	// auto clusterId = subpaving.findTileId(comp);
 
-	//
-	auto cl = this->_clusterData.d_view().getCluster(clusterId);
-	double dc = cl.getDiffusionCoefficient(gridIndex);
-
+ 	//
+ 	auto cl = this->_clusterData.d_view().getCluster(clusterId);
+ 	double dc = cl.getDiffusionCoefficient(gridIndex);
+ 
 	auto disloId = this->_clusterData.d_view().DisloId();
-	auto disloDensity = concentrations(disloId);
+ 	auto disloDensity = concentrations(disloId);
+ 
+ 	holder = (4 * pi * 1.2 * dc) / (log(disloDensity) * B_W);
+ 	return holder;
+ }
 
-	holder = (4 * pi * 1.2 * dc) / (log(disloDensity) * B_W);
 
-	return holder;
-}
+
 
 template <typename TSpeciesEnum>
 void
@@ -406,12 +414,12 @@ PSIReactionNetwork<TSpeciesEnum>::computeFluxesPreProcess(
 		Kokkos::parallel_for(
 			"PSIReactionNetwork::computeFluxesPreProcess", 1,
 			KOKKOS_LAMBDA(IndexType i) {
-				// TODO: implement beta
-				double beta = 2 * pow(pi, 1.5) - pow(pi, 0.5); // Change the Pi
-				double nu_cl = getClimbVelocity(concentrations, gridIndex);
-				auto disloId = this->_clusterData.d_view().DisloId();
+                auto disloId = this->_clusterData.d_view().DisloId();
 				auto disloDensity = concentrations(disloId);
-				fluxes[disloId] += beta * nu_cl * pow(disloDensity, 1.5);
+                double beta = 2 *pi;
+			    auto mean_cl = 1/(pow(pi*disloDensity,0.5)*getClimbVelocity(concentrations, gridIndex));
+				fluxes[disloId] += beta*getClimbVelocity(concentrations, gridIndex)*pow((0.1*disloDensity)/3,1.5) -
+								disloDensity*(1/mean_cl);
 			});
 	}
 
@@ -457,7 +465,8 @@ PSIReactionNetwork<TSpeciesEnum>::computePartialsPreProcess(
 	ConcentrationsView concentrations, Kokkos::View<double*> values,
 	IndexType gridIndex, double surfaceDepth, double spacing)
 {
-	if (this->_enableDislocation) {
+	if (this->_enableDislocation) 
+	{
 		// Equation for dislocation density
 		Kokkos::parallel_for(
 			"PSIReactionNetwork::computeFluxesPreProcess", 1,
@@ -465,7 +474,7 @@ PSIReactionNetwork<TSpeciesEnum>::computePartialsPreProcess(
 				// Get the dislocation density Id
 				auto disloId = this->_clusterData.d_view().DisloId();
 				auto subpaving = this->_subpaving;
-				// TODO: implement beta
+				
 				double beta = 2 * pow(pi, 1.5) - pow(pi, 0.5);
 				// The first contribution is w.r.t. dislocation density
 				auto disloDensity = concentrations(disloId);
@@ -476,6 +485,8 @@ PSIReactionNetwork<TSpeciesEnum>::computePartialsPreProcess(
 						1.5 * sqrt(disloDensity) *
 							getClimbVelocity(concentrations, gridIndex));
 				values(this->_connEntries(0)) += df;
+				
+
 				IndexType nPartials = 1;
 
 				// Single vacancy

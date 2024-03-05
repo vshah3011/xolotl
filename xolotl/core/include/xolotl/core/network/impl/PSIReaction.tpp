@@ -362,17 +362,19 @@ PSIGBSinkReaction<TSpeciesEnum>::computeRate(IndexType gridIndex, double time)
 
 	auto rate = this->_clusterData->extraData.leftSideRates;
 	double s_m = 0.0;
+	 
 	if (rate.size() > 0) {
 		// Look for the correct index
 		auto sMap = this->_clusterData->extraData.sinkMap;
 		auto i = 0;
 		for (i; i < sMap.size(); i++) {
+		    //std::cout<<this->_reactant<<" "<<sMap(i)<<std::endl; 
 			if (sMap(i) == this->_reactant)
 				break;
 		}
 		s_m = rate(i) / dc;
 	}
-
+	
 	// Grain boundary
 	double gb_strength = 0;
 
@@ -394,6 +396,7 @@ PSIGBSinkReaction<TSpeciesEnum>::computeRate(IndexType gridIndex, double time)
 	}
 
 	double strength = gb_strength;
+     
 
 	return strength;
 }
