@@ -418,8 +418,8 @@ PSIReactionNetwork<TSpeciesEnum>::computeFluxesPreProcess(
 				auto disloDensity = concentrations(disloId);
                 double beta = 2 *pi;
 			    auto mean_cl = 1/(pow(pi*disloDensity,0.5)*getClimbVelocity(concentrations, gridIndex));
-				fluxes[disloId] += beta*getClimbVelocity(concentrations, gridIndex)*pow((0.1*disloDensity)/3,1.5) -
-								disloDensity*(1/mean_cl);
+				//fluxes[disloId] += beta*getClimbVelocity(concentrations, gridIndex)*pow((0.1*disloDensity)/3,1.5);
+				fluxes[disloId] += -disloDensity*(1/mean_cl);
 			});
 	}
 
@@ -476,46 +476,47 @@ PSIReactionNetwork<TSpeciesEnum>::computePartialsPreProcess(
 				auto subpaving = this->_subpaving;
 				
 				double beta = 2 * pow(pi, 1.5) - pow(pi, 0.5);
+				//double beta = 0;
 				// The first contribution is w.r.t. dislocation density
 				auto disloDensity = concentrations(disloId);
 				auto df = beta *
 					(pow(disloDensity, 1.5) *
 							getClimbVelocityPartialRho(
-								concentrations, gridIndex) +
-						1.5 * sqrt(disloDensity) *
-							getClimbVelocity(concentrations, gridIndex));
+								concentrations, gridIndex));
+						//+ 1.5 * sqrt(disloDensity) *
+						//	getClimbVelocity(concentrations, gridIndex));
 				values(this->_connEntries(0)) += df;
 				
-
-				IndexType nPartials = 1;
+ 
+				//IndexType nPartials = 1;
 
 				// Single vacancy
-				Composition comp = Composition::zero();
-				comp[Species::V] = 1;
-				auto clusterId = subpaving.findTileId(comp);
-				if (clusterId != subpaving.invalidIndex()) {
-					df = beta * pow(disloDensity, 1.5) *
-						getClimbVelocityPartialV(
-							concentrations, gridIndex, clusterId);
-					values(this->_connEntries(nPartials)) += df;
-					nPartials++;
-				}
+				//Composition comp = Composition::zero();
+				//comp[Species::V] = 1;
+				//auto clusterId = subpaving.findTileId(comp);
+				//if (clusterId != subpaving.invalidIndex()) {
+				//	df = beta * pow(disloDensity, 1.5) *
+				//		getClimbVelocityPartialV(
+				//			concentrations, gridIndex, clusterId);
+				//	values(this->_connEntries(nPartials)) += df;
+				//	nPartials++;
+				//}
 
 				// Interstitials
-				comp = Composition::zero();
-				comp[Species::I] = 1;
-				clusterId = subpaving.findTileId(comp);
-				bool isValid = (clusterId != subpaving.invalidIndex());
-				while (isValid) {
-					df = beta * pow(disloDensity, 1.5) *
-						getClimbVelocityPartialI(
-							concentrations, gridIndex, clusterId);
-					values(this->_connEntries(nPartials)) += df;
-					nPartials++;
-					comp[Species::I]++;
-					clusterId = subpaving.findTileId(comp);
-					isValid = (clusterId != subpaving.invalidIndex());
-				}
+				//comp = Composition::zero();
+				//comp[Species::I] = 1;
+				//clusterId = subpaving.findTileId(comp);
+				//bool isValid = (clusterId != subpaving.invalidIndex());
+				//while (isValid) {
+				//	df = beta * pow(disloDensity, 1.5) *
+				//		getClimbVelocityPartialI(
+				//			concentrations, gridIndex, clusterId);
+				//	values(this->_connEntries(nPartials)) += df;
+				//	nPartials++;
+				//	comp[Species::I]++;
+				//	clusterId = subpaving.findTileId(comp);
+				//	isValid = (clusterId != subpaving.invalidIndex());
+				//}
 			});
 	}
 
@@ -1033,7 +1034,7 @@ PSIReactionGenerator<TSpeciesEnum>::operator()(
 		}
 	}
 
-	// Special case for trap-mutation
+	// Special case for trap-mutation  (To disable TM, comment the lines below)
 	if (nProd == 0) {
 		// Look for larger clusters only if one of the reactant is pure He
 		if (!(cl1Reg.isSimplex() && lo1.isOnAxis(Species::He)) &&

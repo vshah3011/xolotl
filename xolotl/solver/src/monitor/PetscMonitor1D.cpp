@@ -40,6 +40,19 @@ computeTRIDYN(
 }
 
 PetscErrorCode
+profileDislocation(
+	TS ts, PetscInt timestep, PetscReal time, Vec solution, void* ictx)
+{
+	PetscFunctionBeginUser;
+	PetscErrorCode ierr =
+		static_cast<PetscMonitor1D*>(ictx)->profileDislocation(
+			ts, timestep, time, solution);
+	CHKERRQ(ierr);
+	PetscFunctionReturn(0);
+}
+
+
+PetscErrorCode
 profileTemperature(
 	TS ts, PetscInt timestep, PetscReal time, Vec solution, void* ictx)
 {
@@ -95,7 +108,7 @@ PetscMonitor1D::setup(int loop)
 	// Flags to launch the monitors or not
 	PetscBool flagNeg, flagCollapse, flag2DPlot, flag1DPlot, flagSeries,
 		flagPerf, flagHeRetention, flagStatus, flagXeRetention, flagTRIDYN,
-		flagAlloy, flagTemp, flagLargest;
+		flagAlloy, flagDisl, flagTemp, flagLargest;
 
 	// Check the option -check_negative
 	ierr = PetscOptionsHasName(NULL, NULL, "-check_negative", &flagNeg);
@@ -148,6 +161,11 @@ PetscMonitor1D::setup(int loop)
 	ierr = PetscOptionsHasName(NULL, NULL, "-alloy", &flagAlloy);
 	checkPetscError(
 		ierr, "setupPetsc1DMonitor: PetscOptionsHasName (-alloy) failed.");
+		
+    // Check the option -disl_profile
+	ierr = PetscOptionsHasName(NULL, NULL, "-disl_profile", &flagDisl);
+	checkPetscError(ierr,
+		"setupPetsc1DMonitor: PetscOptionsHasName (-disl_profile) failed.");
 
 	// Check the option -temp_profile
 	ierr = PetscOptionsHasName(NULL, NULL, "-temp_profile", &flagTemp);
@@ -646,6 +664,47 @@ PetscMonitor1D::setup(int loop)
 		checkPetscError(
 			ierr, "setupPetsc1DMonitor: TSMonitorSet (computeAlloy) failed.");
 	}
+	
+	// Set the monitor to compute the dislocation profile
+	if (flagDisl) {
+		if (procId == 0 and _loopNumber == 0) 
+		{
+			// Uncomment to clear the file where the retention will be written
+			std::ofstream outputFile;
+			outputFile.open("disloProf.txt");
+
+			// Get the da from _ts
+			DM da;
+			ierr = TSGetDM(_ts, &da);
+			checkPetscError(ierr, "setupPetsc1DMonitor: TSGetDM failed.");
+
+			// Get the total size of the grid
+			PetscInt Mx;
+			ierr = DMDAGetInfo(da, PETSC_IGNORE, &Mx, PETSC_IGNORE,
+				PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE,
+				PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE, PETSC_IGNORE,
+				PETSC_IGNORE, PETSC_IGNORE);
+			checkPetscError(ierr, "setupPetsc1DMonitor: DMDAGetInfo failed.");
+
+			// Get the physical grid
+			auto grid = _solverHandler->getXGrid();
+
+			// Loop on the entire grid
+			for (auto xi = _solverHandler->getLeftOffset();
+				 xi < Mx - _solverHandler->getRightOffset(); xi++) {
+				// Set x
+				double x = (grid[xi] + grid[xi + 1]) / 2.0 - grid[1];
+				outputFile << x << " ";
+			}
+			outputFile << std::endl;
+			outputFile.close();
+			}
+			// compute will be called at each timestep
+		ierr = TSMonitorSet(_ts, monitor::profileDislocation, this, nullptr);
+		checkPetscError(ierr,
+			"setupPetsc1DMonitor: TSMonitorSet (profileDislocation) failed.");
+		}
+	
 
 	// Set the monitor to compute the temperature profile
 	if (flagTemp) {
@@ -2372,6 +2431,120 @@ PetscMonitor1D::computeTRIDYN(
 
 	PetscFunctionReturn(0);
 }
+
+
+// New addition
+PetscErrorCode
+PetscMonitor1D::profileDislocation(
+	TS ts, PetscInt timestep, PetscReal time, Vec solution)
+{
+// Initial declarations
+	PetscErrorCode ierr;
+	IdType xs, xm, Mx, ys, ym, My, zs, zm, Mz;
+
+	PetscFunctionBeginUser;
+
+	// Gets the process ID (important when it is running in parallel)
+	auto xolotlComm = util::getMPIComm();
+	int procId;
+	MPI_Comm_rank(xolotlComm, &procId);
+
+	// Get local coordinates
+	_solverHandler->getLocalCoordinates(xs, xm, Mx, ys, ym, My, zs, zm, Mz);
+
+	// Get the network and dof
+	auto& network = _solverHandler->getNetwork();
+	const auto dof = network.getDOF();
+
+	// Get the da from ts
+	DM da;
+	ierr = TSGetDM(ts, &da);
+	CHKERRQ(ierr);
+
+	// Get the physical grid
+	auto grid = _solverHandler->getXGrid();
+
+	// Get the complete data array, including ghost cells
+	Vec localSolution;
+	ierr = DMGetLocalVector(da, &localSolution);
+	CHKERRQ(ierr);
+	ierr = DMGlobalToLocalBegin(da, solution, INSERT_VALUES, localSolution);
+	CHKERRQ(ierr);
+	ierr = DMGlobalToLocalEnd(da, solution, INSERT_VALUES, localSolution);
+	CHKERRQ(ierr);
+	// Get the array of concentration
+	PetscReal** solutionArray;
+	ierr = DMDAVecGetArrayDOFRead(da, localSolution, &solutionArray);
+	CHKERRQ(ierr);
+
+	// Declare the pointer for the concentrations at a specific grid point
+	PetscReal* gridPointSolution;
+
+	// Create the output file
+	std::ofstream outputFile;
+	if (procId == 0) {
+		outputFile.open("disloProf.txt", std::ios::app);
+		outputFile << time;
+	}
+
+	// Create the local vector of temperature wrt temperatureGrid
+	std::vector<double> localDislocation;
+	// Loop on the local grid including ghosts
+	for (auto i = xs; i < xs + xm + 2; i++) {
+		// Get the pointer to the beginning of the solution data for this
+		// grid point
+		gridPointSolution = solutionArray[(PetscInt)i - 1];
+		localDislocation.push_back(gridPointSolution[dof-3]); // Dislocation density
+	}
+	
+	// Interpolate
+	//auto updatedTemperature =
+	//	_solverHandler->interpolateTempera(localTemperature);
+
+	// Loop on the entire grid
+	for (auto xi = _solverHandler->getLeftOffset();
+		 xi < Mx - _solverHandler->getRightOffset(); xi++) 
+	{
+		// Set x
+		double x = (grid[xi] + grid[xi + 1]) / 2.0 - grid[1];
+
+		double localDisl = 0.0;
+		// Check if this process is in charge of xi
+		if (xi >= xs && xi < xs + xm) {
+			// Get the local temperature
+			localDisl = localDislocation[xi - xs + 1];
+		}
+
+		// Get the value on procId = 0
+		double dislocation = 0.0;
+		MPI_Reduce(
+			&localDisl, &dislocation, 1, MPI_DOUBLE, MPI_SUM, 0, xolotlComm);
+
+		// The master process writes in the file
+		if (procId == 0) {
+			outputFile << " " << dislocation;
+		}
+	}
+
+	// Close the file
+	if (procId == 0) {
+		outputFile << std::endl;
+		outputFile.close();
+	}
+
+	// Restore the solutionArray
+	ierr = DMDAVecRestoreArrayDOFRead(da, localSolution, &solutionArray);
+	CHKERRQ(ierr);
+	ierr = DMRestoreLocalVector(da, &localSolution);
+	CHKERRQ(ierr);
+
+	PetscFunctionReturn(0);
+}
+
+
+//
+
+
 
 PetscErrorCode
 PetscMonitor1D::profileTemperature(

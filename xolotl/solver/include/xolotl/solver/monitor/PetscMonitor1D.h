@@ -91,6 +91,9 @@ public:
 	PetscErrorCode
 	computeTRIDYN(TS ts, PetscInt timestep, PetscReal time, Vec solution);
 
+    PetscErrorCode
+    profileDislocation(TS ts, PetscInt timestep, PetscReal time, Vec solution);
+	
 	PetscErrorCode
 	profileTemperature(TS ts, PetscInt timestep, PetscReal time, Vec solution);
 
