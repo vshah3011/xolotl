@@ -59,7 +59,9 @@ public:
 		TS ts, PetscInt timestep, PetscReal time, Vec solution) override;
 
 	PetscErrorCode
-	startStop(TS ts, PetscInt timestep, PetscReal time, Vec solution) override;
+	startStopImpl(TS ts, PetscInt timestep, PetscReal time, Vec solution,
+		io::XFile& checkpointFile, io::XFile::TimestepGroup* tsGroup,
+		const std::vector<std::string>& speciesNames) override;
 
 	PetscErrorCode
 	computeHeliumRetention(
@@ -86,14 +88,18 @@ public:
 		PetscReal time, Vec solution, PetscBool) override;
 
 	PetscErrorCode
+	computeAlphaZr(
+		TS ts, PetscInt timestep, PetscReal time, Vec solution) override;
+
+	PetscErrorCode
 	checkNegative(TS ts, PetscInt timestep, PetscReal time, Vec solution);
 
 	PetscErrorCode
 	computeTRIDYN(TS ts, PetscInt timestep, PetscReal time, Vec solution);
 
-    PetscErrorCode
-    profileDislocation(TS ts, PetscInt timestep, PetscReal time, Vec solution);
-	
+	PetscErrorCode
+	profileDislocation(TS ts, PetscInt timestep, PetscReal time, Vec solution);
+
 	PetscErrorCode
 	profileTemperature(TS ts, PetscInt timestep, PetscReal time, Vec solution);
 
@@ -117,7 +123,6 @@ protected:
 	std::shared_ptr<perf::ITimer> _initTimer;
 	std::shared_ptr<perf::ITimer> _checkNegativeTimer;
 	std::shared_ptr<perf::ITimer> _tridynTimer;
-	std::shared_ptr<perf::ITimer> _startStopTimer;
 	std::shared_ptr<perf::ITimer> _heRetentionTimer;
 	std::shared_ptr<perf::ITimer> _xeRetentionTimer;
 	std::shared_ptr<perf::ITimer> _scatterTimer;

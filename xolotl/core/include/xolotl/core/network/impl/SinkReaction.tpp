@@ -21,8 +21,8 @@ SinkReaction<TNetwork, TDerived>::computeRate(IndexType gridIndex, double time)
 
 	double strength = this->asDerived()->getSinkBias() *
 		this->asDerived()->getSinkStrength() * dc;
-		
-	//std::cout<<strength<<std::endl;	
+
+	// std::cout<<strength<<std::endl;
 
 	return strength;
 }
@@ -38,8 +38,8 @@ DisloSinkReaction<TNetwork, TDerived>::computeRate(
 
 	double strength = this->asDerived()->getSinkBias() *
 		this->asDerived()->getSinkStrength() * dc;
-   
-    //std::cout<<strength<<std::endl;
+
+	// std::cout<<strength<<std::endl;
 
 	return strength;
 }
@@ -56,7 +56,7 @@ GBSinkReaction<TNetwork, TDerived>::computeRate(
 	double strength = this->asDerived()->getSinkBias() *
 		this->asDerived()->getSinkStrength() * dc;
 
-    //std::cout<<strength<<std::endl;
+	// std::cout<<strength<<std::endl;
 	return strength;
 }
 } // namespace network

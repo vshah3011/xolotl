@@ -5,6 +5,7 @@
 
 #include <xolotl/core/network/PSINetworkHandler.h>
 #include <xolotl/core/network/PSIReactionNetwork.h>
+#include <xolotl/options/ConfOptions.h>
 #include <xolotl/test/CommandLine.h>
 #include <xolotl/test/MPITestUtils.h>
 #include <xolotl/test/PSINetworkTesterData.h>
@@ -29,7 +30,7 @@ BOOST_AUTO_TEST_CASE(fullyRefined)
 {
 	loadNetworkHandlers();
 	// Create the option to create a network
-	xolotl::options::Options opts;
+	xolotl::options::ConfOptions opts;
 	// Create a good parameter file
 	std::string parameterFile = "param.txt";
 	std::ofstream paramFile(parameterFile);
@@ -80,10 +81,6 @@ BOOST_AUTO_TEST_CASE(fullyRefined)
 
 	BOOST_REQUIRE_EQUAL(network.getNumberOfSpecies(), 5);
 	BOOST_REQUIRE_EQUAL(network.getNumberOfSpeciesNoI(), 4);
-
-	// Check the single vacancy
-	auto vacancy = network.getSingleVacancy();
-	BOOST_REQUIRE_EQUAL(vacancy.getId(), 1);
 
 	// Get the diagonal fill
 	const auto dof = network.getDOF();
@@ -579,7 +576,7 @@ BOOST_AUTO_TEST_CASE(fullyRefined)
 BOOST_AUTO_TEST_CASE(reducedMatrixMethod)
 {
 	// Create the option to create a network
-	xolotl::options::Options opts;
+	xolotl::options::ConfOptions opts;
 	// Create a good parameter file
 	std::string parameterFile = "param.txt";
 	std::ofstream paramFile(parameterFile);
@@ -852,7 +849,7 @@ BOOST_AUTO_TEST_CASE(reducedMatrixMethod)
 BOOST_AUTO_TEST_CASE(HeliumSpeciesList)
 {
 	// Create the option to create a network
-	xolotl::options::Options opts;
+	xolotl::options::ConfOptions opts;
 	// Create a good parameter file
 	std::string parameterFile = "param.txt";
 	std::ofstream paramFile(parameterFile);
@@ -901,10 +898,6 @@ BOOST_AUTO_TEST_CASE(HeliumSpeciesList)
 
 	BOOST_REQUIRE_EQUAL(network.getNumberOfSpecies(), 3);
 	BOOST_REQUIRE_EQUAL(network.getNumberOfSpeciesNoI(), 2);
-
-	// Check the single vacancy
-	auto vacancy = network.getSingleVacancy();
-	BOOST_REQUIRE_EQUAL(vacancy.getId(), 2);
 
 	// Get the diagonal fill
 	const auto dof = network.getDOF();
@@ -1148,7 +1141,7 @@ BOOST_AUTO_TEST_CASE(HeliumSpeciesList)
 BOOST_AUTO_TEST_CASE(DeuteriumSpeciesList)
 {
 	// Create the option to create a network
-	xolotl::options::Options opts;
+	xolotl::options::ConfOptions opts;
 	// Create a good parameter file
 	std::string parameterFile = "param.txt";
 	std::ofstream paramFile(parameterFile);
@@ -1198,10 +1191,6 @@ BOOST_AUTO_TEST_CASE(DeuteriumSpeciesList)
 
 	BOOST_REQUIRE_EQUAL(network.getNumberOfSpecies(), 4);
 	BOOST_REQUIRE_EQUAL(network.getNumberOfSpeciesNoI(), 3);
-
-	// Check the single vacancy
-	auto vacancy = network.getSingleVacancy();
-	BOOST_REQUIRE_EQUAL(vacancy.getId(), 1);
 
 	// Get the diagonal fill
 	const auto dof = network.getDOF();
@@ -1497,7 +1486,7 @@ BOOST_AUTO_TEST_CASE(DeuteriumSpeciesList)
 BOOST_AUTO_TEST_CASE(TritiumSpeciesList)
 {
 	// Create the option to create a network
-	xolotl::options::Options opts;
+	xolotl::options::ConfOptions opts;
 	// Create a good parameter file
 	std::string parameterFile = "param.txt";
 	std::ofstream paramFile(parameterFile);
@@ -1547,10 +1536,6 @@ BOOST_AUTO_TEST_CASE(TritiumSpeciesList)
 
 	BOOST_REQUIRE_EQUAL(network.getNumberOfSpecies(), 4);
 	BOOST_REQUIRE_EQUAL(network.getNumberOfSpeciesNoI(), 3);
-
-	// Check the single vacancy
-	auto vacancy = network.getSingleVacancy();
-	BOOST_REQUIRE_EQUAL(vacancy.getId(), 1);
 
 	// Get the diagonal fill
 	const auto dof = network.getDOF();
@@ -1846,7 +1831,7 @@ BOOST_AUTO_TEST_CASE(TritiumSpeciesList)
 BOOST_AUTO_TEST_CASE(HeVGrouped)
 {
 	// Create the option to create a network
-	xolotl::options::Options opts;
+	xolotl::options::ConfOptions opts;
 	// Create a good parameter file
 	std::string parameterFile = "param.txt";
 	std::ofstream paramFile(parameterFile);
@@ -1882,16 +1867,12 @@ BOOST_AUTO_TEST_CASE(HeVGrouped)
 
 	BOOST_REQUIRE_EQUAL(network->getNumberOfSpecies(), 3);
 	BOOST_REQUIRE_EQUAL(network->getNumberOfSpeciesNoI(), 2);
-
-	// Check the single vacancy
-	auto vacancy = network->getSingleVacancy();
-	BOOST_REQUIRE_EQUAL(vacancy.getId(), 0);
 }
 
 BOOST_AUTO_TEST_CASE(HeDVGrouped)
 {
 	// Create the option to create a network
-	xolotl::options::Options opts;
+	xolotl::options::ConfOptions opts;
 	// Create a good parameter file
 	std::string parameterFile = "param.txt";
 	std::ofstream paramFile(parameterFile);
@@ -1927,16 +1908,12 @@ BOOST_AUTO_TEST_CASE(HeDVGrouped)
 
 	BOOST_REQUIRE_EQUAL(network->getNumberOfSpecies(), 4);
 	BOOST_REQUIRE_EQUAL(network->getNumberOfSpeciesNoI(), 3);
-
-	// Check the single vacancy
-	auto vacancy = network->getSingleVacancy();
-	BOOST_REQUIRE_EQUAL(vacancy.getId(), 83);
 }
 
 BOOST_AUTO_TEST_CASE(HeTVGrouped)
 {
 	// Create the option to create a network
-	xolotl::options::Options opts;
+	xolotl::options::ConfOptions opts;
 	// Create a good parameter file
 	std::string parameterFile = "param.txt";
 	std::ofstream paramFile(parameterFile);
@@ -1972,16 +1949,12 @@ BOOST_AUTO_TEST_CASE(HeTVGrouped)
 
 	BOOST_REQUIRE_EQUAL(network->getNumberOfSpecies(), 4);
 	BOOST_REQUIRE_EQUAL(network->getNumberOfSpeciesNoI(), 3);
-
-	// Check the single vacancy
-	auto vacancy = network->getSingleVacancy();
-	BOOST_REQUIRE_EQUAL(vacancy.getId(), 83);
 }
 
 BOOST_AUTO_TEST_CASE(HeDTVGrouped)
 {
 	// Create the option to create a network
-	xolotl::options::Options opts;
+	xolotl::options::ConfOptions opts;
 	// Create a good parameter file
 	std::string parameterFile = "param.txt";
 	std::ofstream paramFile(parameterFile);
@@ -2017,16 +1990,12 @@ BOOST_AUTO_TEST_CASE(HeDTVGrouped)
 
 	BOOST_REQUIRE_EQUAL(network->getNumberOfSpecies(), 5);
 	BOOST_REQUIRE_EQUAL(network->getNumberOfSpeciesNoI(), 4);
-
-	// Check the single vacancy
-	auto vacancy = network->getSingleVacancy();
-	BOOST_REQUIRE_EQUAL(vacancy.getId(), 55);
 }
 
 BOOST_AUTO_TEST_CASE(IGrouped)
 {
 	// Create the option to create a network
-	xolotl::options::Options opts;
+	xolotl::options::ConfOptions opts;
 	// Create a good parameter file
 	std::string parameterFile = "param.txt";
 	std::ofstream paramFile(parameterFile);
@@ -2062,16 +2031,12 @@ BOOST_AUTO_TEST_CASE(IGrouped)
 
 	BOOST_REQUIRE_EQUAL(network->getNumberOfSpecies(), 3);
 	BOOST_REQUIRE_EQUAL(network->getNumberOfSpeciesNoI(), 2);
-
-	// Check the single vacancy
-	auto vacancy = network->getSingleVacancy();
-	BOOST_REQUIRE_EQUAL(vacancy.getId(), 2);
 }
 
 BOOST_AUTO_TEST_CASE(VIGrouped)
 {
 	// Create the option to create a network
-	xolotl::options::Options opts;
+	xolotl::options::ConfOptions opts;
 	// Create a good parameter file
 	std::string parameterFile = "param.txt";
 	std::ofstream paramFile(parameterFile);
@@ -2107,10 +2072,6 @@ BOOST_AUTO_TEST_CASE(VIGrouped)
 
 	BOOST_REQUIRE_EQUAL(network->getNumberOfSpecies(), 3);
 	BOOST_REQUIRE_EQUAL(network->getNumberOfSpeciesNoI(), 2);
-
-	// Check the single vacancy
-	auto vacancy = network->getSingleVacancy();
-	BOOST_REQUIRE_EQUAL(vacancy.getId(), 586);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

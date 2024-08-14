@@ -4,6 +4,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <xolotl/core/network/FeReactionNetwork.h>
+#include <xolotl/options/ConfOptions.h>
 #include <xolotl/test/CommandLine.h>
 #include <xolotl/test/Util.h>
 
@@ -23,7 +24,7 @@ BOOST_AUTO_TEST_SUITE(FeNetwork_testSuite)
 BOOST_AUTO_TEST_CASE(fullyRefined)
 {
 	// Create the option to create a network
-	xolotl::options::Options opts;
+	xolotl::options::ConfOptions opts;
 	// Create a good parameter file
 	std::string parameterFile = "param.txt";
 	std::ofstream paramFile(parameterFile);
@@ -66,10 +67,6 @@ BOOST_AUTO_TEST_CASE(fullyRefined)
 
 	BOOST_REQUIRE_EQUAL(network.getNumberOfSpecies(), 3);
 	BOOST_REQUIRE_EQUAL(network.getNumberOfSpeciesNoI(), 2);
-
-	// Check the single vacancy
-	auto vacancy = network.getSingleVacancy();
-	BOOST_REQUIRE_EQUAL(vacancy.getId(), 1);
 
 	// Get the diagonal fill
 	const auto dof = network.getDOF();
@@ -305,7 +302,7 @@ BOOST_AUTO_TEST_CASE(fullyRefined)
 BOOST_AUTO_TEST_CASE(grouped)
 {
 	// Create the option to create a network
-	xolotl::options::Options opts;
+	xolotl::options::ConfOptions opts;
 	// Create a good parameter file
 	std::string parameterFile = "param.txt";
 	std::ofstream paramFile(parameterFile);
@@ -352,10 +349,6 @@ BOOST_AUTO_TEST_CASE(grouped)
 	// TODO: Test each value explicitly?
 	typename NetworkType::Bounds bounds = network.getAllClusterBounds();
 	BOOST_REQUIRE_EQUAL(bounds.size(), 30);
-
-	// Check the single vacancy
-	auto vacancy = network.getSingleVacancy();
-	BOOST_REQUIRE_EQUAL(vacancy.getId(), 0);
 
 	// Get the diagonal fill
 	const auto dof = network.getDOF();

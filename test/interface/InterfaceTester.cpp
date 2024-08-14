@@ -7,7 +7,7 @@
 #include <boost/test/framework.hpp>
 #include <boost/test/unit_test.hpp>
 
-#include <xolotl/interface/Interface.h>
+#include <xolotl/interface/XolotlInterface.h>
 #include <xolotl/test/CommandLine.h>
 
 using namespace std;
@@ -30,7 +30,7 @@ BOOST_AUTO_TEST_CASE(simple0D)
 				 "-pc_fieldsplit_detect_coupling "
 				 "-ts_adapt_dt_max 10 "
 				 "-pc_type fieldsplit "
-				 "-fieldsplit_1_pc_type sor "
+				 "-fieldsplit_1_pc_type jacobi "
 				 "-ts_max_time 1000 "
 				 "-ts_max_steps 1 "
 				 "-ts_dt 0.1 "
@@ -42,24 +42,22 @@ BOOST_AUTO_TEST_CASE(simple0D)
 			  << "material=Fuel" << std::endl
 			  << "dimensions=0" << std::endl
 			  << "process=reaction" << std::endl
-			  << "netParam=10 0 0 0 0" << std::endl;
+			  << "netParam=5 0 0 5 1" << std::endl;
 	paramFile.close();
 
 	// Create a fake command line to read the options
 	test::CommandLine<2> cl{{"fakeXolotlAppNameForTests", parameterFile}};
 
 	// Create and run the solver
-	auto interface = xolotl::interface::XolotlInterface {
-		cl.argc, cl.argv
-	};
+	auto interface = xolotl::interface::XolotlInterface{cl.argc, cl.argv};
 	interface.solveXolotl();
 
 	// Get data to check
 	auto concVector = interface.getConcVector();
 	BOOST_REQUIRE_EQUAL(concVector[0][0][0][0].first, 0);
-	BOOST_REQUIRE_SMALL(concVector[0][0][0][0].second, 1.0e-4);
+	BOOST_REQUIRE_CLOSE(concVector[0][0][0][0].second, 400000000, 0.01);
 	BOOST_REQUIRE_EQUAL(concVector[0][0][0][10].first, 10);
-	BOOST_REQUIRE_EQUAL(concVector[0][0][0][10].second, 900);
+	BOOST_REQUIRE_EQUAL(concVector[0][0][0][10].second, 0);
 
 	std::remove(parameterFile.c_str());
 }

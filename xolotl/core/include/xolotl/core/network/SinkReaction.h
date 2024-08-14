@@ -1,5 +1,8 @@
 #pragma once
 
+#include <math.h>
+
+#include <xolotl/core/Constants.h>
 #include <xolotl/core/network/Reaction.h>
 #include <xolotl/core/network/SpeciesEnumSequence.h>
 
@@ -30,6 +33,7 @@ public:
 	using FluxesView = typename Superclass::FluxesView;
 	using RatesView = typename Superclass::RatesView;
 	using ConnectivitiesView = typename Superclass::ConnectivitiesView;
+	using ConnectivitiesPairView = typename Superclass::ConnectivitiesPairView;
 	using BelongingView = typename Superclass::BelongingView;
 	using OwnedSubMapView = typename Superclass::OwnedSubMapView;
 	using AmountType = typename Superclass::AmountType;
@@ -58,6 +62,12 @@ public:
 	allocateCoefficientsView(IndexType)
 	{
 		return detail::CoefficientsView();
+	}
+
+	static detail::ConstantRateView
+	allocateConstantRateView(IndexType, IndexType)
+	{
+		return detail::ConstantRateView();
 	}
 
 	KOKKOS_INLINE_FUNCTION
@@ -123,7 +133,7 @@ private:
 	KOKKOS_INLINE_FUNCTION
 	void
 	computeConstantRates(ConcentrationsView concentrations, RatesView rates,
-		BelongingView isInSub, OwnedSubMapView backMap, IndexType gridIndex)
+		BelongingView isInSub, IndexType subId, IndexType gridIndex)
 	{
 		return;
 	}
@@ -149,6 +159,15 @@ private:
 	mapJacobianEntries(Connectivity connectivity)
 	{
 		_connEntries[0] = connectivity(_reactant, _reactant);
+	}
+
+	KOKKOS_INLINE_FUNCTION
+	void
+	mapRateEntries(ConnectivitiesPairView connectivityRow,
+		ConnectivitiesPairView connectivityEntries, BelongingView isInSub,
+		OwnedSubMapView backMap, IndexType subId)
+	{
+		return;
 	}
 
 protected:
@@ -179,6 +198,7 @@ public:
 	using FluxesView = typename Superclass::FluxesView;
 	using RatesView = typename Superclass::RatesView;
 	using ConnectivitiesView = typename Superclass::ConnectivitiesView;
+	using ConnectivitiesPairView = typename Superclass::ConnectivitiesPairView;
 	using BelongingView = typename Superclass::BelongingView;
 	using OwnedSubMapView = typename Superclass::OwnedSubMapView;
 	using AmountType = typename Superclass::AmountType;
@@ -213,6 +233,12 @@ public:
 		return detail::CoefficientsView();
 	}
 
+	static detail::ConstantRateView
+	allocateConstantRateView(IndexType, IndexType)
+	{
+		return detail::ConstantRateView();
+	}
+
 	KOKKOS_INLINE_FUNCTION
 	double
 	computeRate(IndexType gridIndex, double time = 0.0);
@@ -287,7 +313,7 @@ protected:
 	KOKKOS_INLINE_FUNCTION
 	void
 	computeConstantRates(ConcentrationsView concentrations, RatesView rates,
-		BelongingView isInSub, OwnedSubMapView backMap, IndexType gridIndex)
+		BelongingView isInSub, IndexType subId, IndexType gridIndex)
 	{
 		return;
 	}
@@ -314,6 +340,15 @@ protected:
 	{
 		_connEntries[0] = connectivity(_reactant, _reactant);
 		_connEntries[1] = connectivity(_product, _reactant);
+	}
+
+	KOKKOS_INLINE_FUNCTION
+	void
+	mapRateEntries(ConnectivitiesPairView connectivityRow,
+		ConnectivitiesPairView connectivityEntries, BelongingView isInSub,
+		OwnedSubMapView backMap, IndexType subId)
+	{
+		return;
 	}
 
 protected:
@@ -345,6 +380,7 @@ public:
 	using FluxesView = typename Superclass::FluxesView;
 	using RatesView = typename Superclass::RatesView;
 	using ConnectivitiesView = typename Superclass::ConnectivitiesView;
+	using ConnectivitiesPairView = typename Superclass::ConnectivitiesPairView;
 	using BelongingView = typename Superclass::BelongingView;
 	using OwnedSubMapView = typename Superclass::OwnedSubMapView;
 	using AmountType = typename Superclass::AmountType;
@@ -377,6 +413,12 @@ public:
 		return detail::CoefficientsView();
 	}
 
+	static detail::ConstantRateView
+	allocateConstantRateView(IndexType, IndexType)
+	{
+		return detail::ConstantRateView();
+	}
+
 	KOKKOS_INLINE_FUNCTION
 	double
 	computeRate(IndexType gridIndex, double time = 0.0);
@@ -451,7 +493,7 @@ protected:
 	KOKKOS_INLINE_FUNCTION
 	void
 	computeConstantRates(ConcentrationsView concentrations, RatesView rates,
-		BelongingView isInSub, OwnedSubMapView backMap, IndexType gridIndex)
+		BelongingView isInSub, IndexType subId, IndexType gridIndex)
 	{
 		return;
 	}
@@ -478,6 +520,15 @@ protected:
 	{
 		_connEntries[0] = connectivity(_reactant, _reactant);
 		_connEntries[1] = connectivity(_product, _reactant);
+	}
+
+	KOKKOS_INLINE_FUNCTION
+	void
+	mapRateEntries(ConnectivitiesPairView connectivityRow,
+		ConnectivitiesPairView connectivityEntries, BelongingView isInSub,
+		OwnedSubMapView backMap, IndexType subId)
+	{
+		return;
 	}
 
 protected:
