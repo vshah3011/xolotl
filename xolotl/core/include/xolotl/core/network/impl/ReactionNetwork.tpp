@@ -1689,6 +1689,7 @@ ReactionNetwork<TImpl>::defineReactions(Connectivity& connectivity)
 		_constantConnsRows, _constantConnsEntries);
 	_reactions = generator.generateReactions();
 	connectivity = generator.getConnectivity();
+	asDerived()->setConnectivity(connectivity);
 }
 
 template <typename TImpl>

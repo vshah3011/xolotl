@@ -428,15 +428,20 @@ PSIReactionNetwork<TSpeciesEnum>::computeFluxesPreProcess(
 
 	if (this->_enableSink) {
 		// Compute the left side rates
+		for (auto i = 0;
+			 i < this->_clusterData.h_view().extraData.sinkMap.size(); i++) {
+			this->_clusterData.h_view().extraData.leftSideRates(
+				i) = this->getLeftSideRate(concentrations,
+				this->_clusterData.h_view().extraData.sinkMap(i), gridIndex);
+		}
+
+		// Deep copy
 		auto& clusterData = this->_clusterData.d_view;
-		Kokkos::parallel_for(
-			"PSIReactionNetwork::computeFluxesPreProcess",
-			this->_clusterData.h_view().extraData.sinkMap.size(),
-			KOKKOS_LAMBDA(IndexType i) {
-				clusterData().extraData.leftSideRates(i) =
-					this->getLeftSideRate(concentrations,
-						clusterData().extraData.sinkMap(i), gridIndex);
-			});
+		auto dataMirror = create_mirror_view(
+			this->_clusterData.h_view().extraData.leftSideRates);
+		deep_copy(
+			dataMirror, this->_clusterData.h_view().extraData.leftSideRates);
+		clusterData().extraData.leftSideRates = dataMirror;
 
 		// Update the sink rate
 		using SinkReactionType = typename Superclass::Traits::SinkReactionType;
@@ -522,15 +527,20 @@ PSIReactionNetwork<TSpeciesEnum>::computePartialsPreProcess(
 
 	if (this->_enableSink) {
 		// Compute the left side rates
+		for (auto i = 0;
+			 i < this->_clusterData.h_view().extraData.sinkMap.size(); i++) {
+			this->_clusterData.h_view().extraData.leftSideRates(
+				i) = this->getLeftSideRate(concentrations,
+				this->_clusterData.h_view().extraData.sinkMap(i), gridIndex);
+		}
+
+		// Deep copy
 		auto& clusterData = this->_clusterData.d_view;
-		Kokkos::parallel_for(
-			"PSIReactionNetwork::computePartialsPreProcess",
-			this->_clusterData.h_view().extraData.sinkMap.size(),
-			KOKKOS_LAMBDA(IndexType i) {
-				clusterData().extraData.leftSideRates(i) =
-					this->getLeftSideRate(concentrations,
-						clusterData().extraData.sinkMap(i), gridIndex);
-			});
+		auto dataMirror = create_mirror_view(
+			this->_clusterData.h_view().extraData.leftSideRates);
+		deep_copy(
+			dataMirror, this->_clusterData.h_view().extraData.leftSideRates);
+		clusterData().extraData.leftSideRates = dataMirror;
 
 		// Update the sink rate
 		using SinkReactionType = typename Superclass::Traits::SinkReactionType;

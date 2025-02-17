@@ -458,6 +458,7 @@ Options::setProcesses(const std::string& processList)
 	processMap["soret"] = false;
 	processMap["constant"] = false;
 	processMap["noSolve"] = false;
+	processMap["dislocation"] = false;
 
 	// Break the argument into tokens.
 	auto tokens = util::Tokenizer<>{processList}();
